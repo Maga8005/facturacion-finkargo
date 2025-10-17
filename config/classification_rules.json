@@ -1,0 +1,23 @@
+{
+  "reglas": [
+    {
+      "nombre": "Ejemplo de regla",
+      "condicion": "campo_x contiene 'valor'",
+      "clasificacion": "Categoria A",
+      "activa": true
+    }
+  ],
+  "categorias": [
+    "Nacional",
+    "Internacional",
+    "Servicios",
+    "Productos"
+  ],
+  "prioridades": {
+    "descripcion": "Orden de aplicación de reglas (mayor = más prioritario)",
+    "valores": {
+      "regla_1": 1,
+      "regla_2": 2
+    }
+  }
+}

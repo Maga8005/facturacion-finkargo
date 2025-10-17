@@ -1,0 +1,20 @@
+{
+  "nuva_1": {
+    "descripcion": "Mapeo de columnas para primer archivo NUVA",
+    "columnas": {
+      "ejemplo_columna_original": "columna_normalizada"
+    }
+  },
+  "nuva_2": {
+    "descripcion": "Mapeo de columnas para segundo archivo NUVA",
+    "columnas": {
+      "ejemplo_columna_original": "columna_normalizada"
+    }
+  },
+  "netsuite": {
+    "descripcion": "Mapeo de columnas para archivo Netsuite",
+    "columnas": {
+      "ejemplo_columna_original": "columna_normalizada"
+    }
+  }
+}
