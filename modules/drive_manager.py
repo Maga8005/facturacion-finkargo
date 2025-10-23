@@ -7,29 +7,39 @@ import streamlit as st
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
+from google.oauth2.credentials import Credentials
 import io
 import pandas as pd
 from typing import List, Dict, Optional
 import zipfile
 from datetime import datetime
 import time
+import os
+import json
 
 class DriveManager:
-    """Gestiona la búsqueda y descarga de facturas desde Google Drive"""
-    
-    SCOPES = ['https://www.googleapis.com/auth/drive.readonly']
+    """Gestiona la búsqueda, descarga y subida de archivos en Google Drive"""
+
+    # Permisos completos para leer facturas existentes y crear archivos maestros
+    SCOPES = ['https://www.googleapis.com/auth/drive']
     
     def __init__(self):
         """Inicializa la conexión con Google Drive"""
         self.service = None
         self.folder_id = st.secrets.get("drive_folder_id", "")
         self.creds = None
-        
-        # Intentar restaurar credenciales si existen
-        if 'google_drive_creds' in st.session_state:
+        self.token_file = 'token.json'  # Archivo para persistir credenciales
+
+        # Intentar cargar credenciales desde archivo primero
+        self._load_credentials_from_file()
+
+        # Si no hay en archivo, intentar desde session_state
+        if not self.creds and 'google_drive_creds' in st.session_state:
             try:
                 self.creds = st.session_state.google_drive_creds
                 self.service = build('drive', 'v3', credentials=self.creds)
+                # Guardar en archivo para próximas sesiones
+                self._save_credentials_to_file()
             except:
                 pass
     
@@ -145,17 +155,20 @@ class DriveManager:
                             self.creds = flow.credentials
                             st.session_state.google_drive_creds = self.creds
                             self.service = build('drive', 'v3', credentials=self.creds)
-                            
+
+                            # Guardar credenciales en archivo para persistencia
+                            self._save_credentials_to_file()
+
                             # Limpiar flow
                             if 'oauth_flow' in st.session_state:
                                 del st.session_state.oauth_flow
-                            
+
                             st.success("✅ ¡Conectado exitosamente a Google Drive!")
                             st.balloons()
-                            
+
                             # Pequeño delay para que se vea el mensaje
                             time.sleep(1)
-                            
+
                             st.rerun()
                             
                     except Exception as e:
@@ -176,7 +189,62 @@ class DriveManager:
                             st.markdown("- Hayas usado la cuenta **maleja8005@gmail.com** para autorizar")
         
         return False
-    
+
+    def _save_credentials_to_file(self):
+        """Guarda las credenciales en un archivo JSON para persistencia"""
+        if not self.creds:
+            return
+
+        try:
+            creds_data = {
+                'token': self.creds.token,
+                'refresh_token': self.creds.refresh_token,
+                'token_uri': self.creds.token_uri,
+                'client_id': self.creds.client_id,
+                'client_secret': self.creds.client_secret,
+                'scopes': self.creds.scopes
+            }
+
+            with open(self.token_file, 'w') as token:
+                json.dump(creds_data, token)
+
+            # Mensaje solo para debug
+            # st.info(f"🔐 Credenciales guardadas en {self.token_file}")
+        except Exception as e:
+            # Solo log, no mostrar error al usuario
+            pass
+
+    def _load_credentials_from_file(self):
+        """Carga las credenciales desde archivo JSON si existe"""
+        if not os.path.exists(self.token_file):
+            return
+
+        try:
+            with open(self.token_file, 'r') as token:
+                creds_data = json.load(token)
+
+            self.creds = Credentials(
+                token=creds_data.get('token'),
+                refresh_token=creds_data.get('refresh_token'),
+                token_uri=creds_data.get('token_uri'),
+                client_id=creds_data.get('client_id'),
+                client_secret=creds_data.get('client_secret'),
+                scopes=creds_data.get('scopes')
+            )
+
+            # Construir servicio
+            self.service = build('drive', 'v3', credentials=self.creds)
+
+            # Guardar en session_state también
+            st.session_state.google_drive_creds = self.creds
+
+        except Exception as e:
+            # Si hay error al cargar, eliminar archivo corrupto
+            if os.path.exists(self.token_file):
+                os.remove(self.token_file)
+            self.creds = None
+            self.service = None
+
     def is_authenticated(self) -> bool:
         """Verifica si hay una conexión activa"""
         try:
@@ -352,6 +420,130 @@ class DriveManager:
             return f"{size_bytes:.1f} TB"
         except:
             return "N/A"
+
+    def create_folder_if_not_exists(self, folder_name: str, parent_folder_id: str = None) -> Optional[str]:
+        """Crea una carpeta en Drive si no existe, o retorna el ID si ya existe"""
+        if not self.is_authenticated():
+            return None
+
+        try:
+            # Buscar si la carpeta ya existe
+            query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+
+            if parent_folder_id:
+                query += f" and '{parent_folder_id}' in parents"
+
+            results = self.service.files().list(
+                q=query,
+                fields="files(id, name)"
+            ).execute()
+
+            files = results.get('files', [])
+
+            if files:
+                # La carpeta ya existe
+                return files[0]['id']
+
+            # Crear nueva carpeta
+            file_metadata = {
+                'name': folder_name,
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
+
+            if parent_folder_id:
+                file_metadata['parents'] = [parent_folder_id]
+
+            folder = self.service.files().create(
+                body=file_metadata,
+                fields='id'
+            ).execute()
+
+            return folder.get('id')
+
+        except Exception as e:
+            st.error(f"Error al crear carpeta: {str(e)}")
+            return None
+
+    def upload_file(self, file_content: bytes, file_name: str, folder_id: str = None) -> Optional[Dict]:
+        """Sube un archivo a Google Drive"""
+        if not self.is_authenticated():
+            return None
+
+        try:
+            from googleapiclient.http import MediaIoBaseUpload
+
+            file_metadata = {'name': file_name}
+
+            if folder_id:
+                file_metadata['parents'] = [folder_id]
+            elif self.folder_id:
+                file_metadata['parents'] = [self.folder_id]
+
+            # Crear media desde bytes
+            media = MediaIoBaseUpload(
+                io.BytesIO(file_content),
+                mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                resumable=True
+            )
+
+            # Subir archivo
+            file = self.service.files().create(
+                body=file_metadata,
+                media_body=media,
+                fields='id, name, webViewLink, createdTime, size'
+            ).execute()
+
+            return {
+                'id': file.get('id'),
+                'nombre': file.get('name'),
+                'link': file.get('webViewLink'),
+                'fecha_creacion': file.get('createdTime'),
+                'tamano': self._format_size(file.get('size', 0))
+            }
+
+        except Exception as e:
+            st.error(f"Error al subir archivo: {str(e)}")
+            return None
+
+    def list_master_files(self, folder_id: str = None, limit: int = 10) -> List[Dict]:
+        """Lista archivos maestros generados (con timestamp en el nombre)"""
+        if not self.is_authenticated():
+            return []
+
+        try:
+            # Buscar archivos que contengan "Maestro" en el nombre
+            query = "name contains 'Maestro' and trashed=false"
+
+            if folder_id:
+                query += f" and '{folder_id}' in parents"
+            elif self.folder_id:
+                query += f" and '{self.folder_id}' in parents"
+
+            results = self.service.files().list(
+                q=query,
+                pageSize=limit,
+                fields="files(id, name, createdTime, modifiedTime, size, webViewLink)",
+                orderBy="createdTime desc"
+            ).execute()
+
+            files = results.get('files', [])
+
+            archivos = []
+            for file in files:
+                archivos.append({
+                    'id': file['id'],
+                    'nombre': file['name'],
+                    'fecha_creacion': file.get('createdTime', ''),
+                    'fecha_modificacion': file.get('modifiedTime', ''),
+                    'tamano': self._format_size(file.get('size', 0)),
+                    'link': file.get('webViewLink', '')
+                })
+
+            return archivos
+
+        except Exception as e:
+            st.error(f"Error al listar archivos maestros: {str(e)}")
+            return []
 
 
 def get_invoice_numbers_from_dataframe(df, column_name: str = 'numero_factura') -> List[str]:

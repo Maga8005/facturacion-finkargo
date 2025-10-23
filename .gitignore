@@ -43,6 +43,7 @@ data/logs/*.log
 # Config sensible
 config/sheets_config.json
 *.json.backup
+token.json
 
 # OS
 .DS_Store

@@ -1,20 +1,38 @@
 {
-  "nuva_1": {
-    "descripcion": "Mapeo de columnas para primer archivo NUVA",
-    "columnas": {
-      "ejemplo_columna_original": "columna_normalizada"
-    }
-  },
-  "nuva_2": {
-    "descripcion": "Mapeo de columnas para segundo archivo NUVA",
-    "columnas": {
-      "ejemplo_columna_original": "columna_normalizada"
-    }
-  },
   "netsuite": {
-    "descripcion": "Mapeo de columnas para archivo Netsuite",
-    "columnas": {
-      "ejemplo_columna_original": "columna_normalizada"
+    "sheet_name": "VistapredeterminadaTransaccin",
+    "columns": {
+      "numero_factura": "Número de documento",
+      "moneda": "Moneda",
+      "valor": "Importe (moneda extranjera)"
+    }
+  },
+  "noova_facturas": {
+    "sheet_name": "Documentos",
+    "columns": {
+      "fecha": "RECEPCIÓN",
+      "numero_factura": "NÚMERO",
+      "nit": "CÓDIGO TERCERO",
+      "nombre_cliente": "NOMBRE TERCERO",
+      "email": "EMAIL TERCERO",
+      "estado": "ESTADO",
+      "envio": "ENVIO TERCERO",
+      "codigo_operacion": "ORDEN DE COMPRA",
+      "concepto": "NOMBRE PRODUCTO"
+    }
+  },
+  "noova_notas_credito": {
+    "sheet_name": "Documentos",
+    "columns": {
+      "fecha": "RECEPCIÓN",
+      "numero_factura": "NÚMERO",
+      "nit": "CÓDIGO TERCERO",
+      "nombre_cliente": "NOMBRE TERCERO",
+      "email": "EMAIL TERCERO",
+      "estado": "ESTADO",
+      "envio": "ENVIO TERCERO",
+      "codigo_operacion": "ORDEN DE COMPRA",
+      "concepto": "NOMBRE PRODUCTO"
     }
   }
 }
