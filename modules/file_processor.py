@@ -102,6 +102,60 @@ class FileProcessor:
             logger.error(f"❌ Error al leer archivo Netsuite: {e}")
             raise
 
+    def read_netsuite_nc_file(self, file_path: str) -> pd.DataFrame:
+        """
+        Lee archivo Netsuite Notas de Crédito (.xls) y retorna DataFrame normalizado
+
+        Args:
+            file_path: Ruta al archivo .xls de Netsuite NC
+
+        Returns:
+            DataFrame con columnas: numero_factura, moneda, valor_netsuite
+        """
+        try:
+            config = self.column_mapping['netsuite_nc']
+            sheet_name = config['sheet_name']
+            cols = config['columns']
+
+            # Intentar leer con openpyxl primero (soporta .xls y .xlsx modernos)
+            # Si falla, intentar con xlrd (archivos .xls antiguos)
+            try:
+                df = pd.read_excel(file_path, sheet_name=sheet_name, engine='openpyxl')
+                logger.info("✅ Archivo NC leído con openpyxl (formato moderno)")
+            except Exception as e1:
+                try:
+                    df = pd.read_excel(file_path, sheet_name=sheet_name, engine='xlrd')
+                    logger.info("✅ Archivo NC leído con xlrd (formato antiguo)")
+                except Exception as e2:
+                    raise Exception(f"No se pudo leer el archivo NC con ningún engine. Openpyxl: {str(e1)}, Xlrd: {str(e2)}")
+
+            # Renombrar columnas según mapeo
+            df_renamed = df.rename(columns={
+                cols['numero_factura']: 'numero_factura',
+                cols['moneda']: 'moneda',
+                cols['valor']: 'valor_netsuite'
+            })
+
+            # Seleccionar solo las columnas necesarias
+            df_result = df_renamed[['numero_factura', 'moneda', 'valor_netsuite']].copy()
+
+            # Limpiar y normalizar numero_factura
+            df_result['numero_factura'] = df_result['numero_factura'].astype(str).str.strip().str.upper()
+
+            # Convertir valor a numérico
+            df_result['valor_netsuite'] = pd.to_numeric(df_result['valor_netsuite'], errors='coerce')
+
+            # Remover filas sin número de factura válido
+            df_result = df_result[df_result['numero_factura'].notna()]
+            df_result = df_result[df_result['numero_factura'] != 'NAN']
+
+            logger.info(f"✅ Netsuite NC: {len(df_result)} registros leídos de {file_path}")
+            return df_result
+
+        except Exception as e:
+            logger.error(f"❌ Error al leer archivo Netsuite NC: {e}")
+            raise
+
     def read_noova_file(self, file_path: str, file_type: str) -> pd.DataFrame:
         """
         Lee archivo Noova (.xlsx) de facturas o notas de crédito
@@ -271,34 +325,74 @@ class FileProcessor:
         self,
         df_netsuite: pd.DataFrame,
         df_facturas: pd.DataFrame,
-        df_notas: Optional[pd.DataFrame] = None
+        df_notas: Optional[pd.DataFrame] = None,
+        df_netsuite_nc: Optional[pd.DataFrame] = None
     ) -> pd.DataFrame:
         """
         Consolida datos de Netsuite, Facturas y Notas de Crédito
 
         Args:
-            df_netsuite: DataFrame de Netsuite
+            df_netsuite: DataFrame de Netsuite Facturas
             df_facturas: DataFrame de Facturas Noova
-            df_notas: DataFrame de Notas de Crédito (opcional)
+            df_notas: DataFrame de Notas de Crédito Noova (opcional)
+            df_netsuite_nc: DataFrame de Notas de Crédito Netsuite (opcional)
 
         Returns:
             DataFrame consolidado con todas las columnas necesarias
         """
         try:
-            # Combinar facturas y notas de crédito
-            if df_notas is not None and not df_notas.empty:
-                df_noova_combined = pd.concat([df_facturas, df_notas], ignore_index=True)
-                logger.info(f"📊 Combinando {len(df_facturas)} facturas + {len(df_notas)} notas de crédito")
+            # Combinar facturas Noova y notas de crédito Noova
+            if df_facturas is not None and not df_facturas.empty:
+                if df_notas is not None and not df_notas.empty:
+                    df_noova_combined = pd.concat([df_facturas, df_notas], ignore_index=True)
+                    logger.info(f"📊 Combinando {len(df_facturas)} facturas Noova + {len(df_notas)} notas de crédito Noova")
+                else:
+                    df_noova_combined = df_facturas.copy()
+                    logger.info(f"📊 Procesando {len(df_facturas)} facturas Noova (sin notas de crédito)")
+            elif df_notas is not None and not df_notas.empty:
+                # Solo hay notas de crédito Noova, sin facturas
+                df_noova_combined = df_notas.copy()
+                logger.info(f"📊 Procesando {len(df_notas)} notas de crédito Noova (sin facturas)")
             else:
-                df_noova_combined = df_facturas.copy()
-                logger.info(f"📊 Procesando {len(df_facturas)} facturas (sin notas de crédito)")
+                # No hay datos Noova
+                df_noova_combined = None
+                logger.warning("⚠️ No hay datos de Noova para procesar")
+
+            # Combinar facturas Netsuite y notas de crédito Netsuite
+            if df_netsuite is not None and not df_netsuite.empty:
+                if df_netsuite_nc is not None and not df_netsuite_nc.empty:
+                    df_netsuite_combined = pd.concat([df_netsuite, df_netsuite_nc], ignore_index=True)
+                    logger.info(f"📊 Combinando {len(df_netsuite)} facturas Netsuite + {len(df_netsuite_nc)} notas de crédito Netsuite")
+                else:
+                    df_netsuite_combined = df_netsuite.copy()
+                    logger.info(f"📊 Procesando {len(df_netsuite)} facturas Netsuite (sin notas de crédito)")
+            elif df_netsuite_nc is not None and not df_netsuite_nc.empty:
+                # Solo hay notas de crédito Netsuite, sin facturas
+                df_netsuite_combined = df_netsuite_nc.copy()
+                logger.info(f"📊 Procesando {len(df_netsuite_nc)} notas de crédito Netsuite (sin facturas)")
+            else:
+                # No hay datos Netsuite
+                df_netsuite_combined = None
+                logger.warning("⚠️ No hay datos de Netsuite para procesar")
 
             # LEFT JOIN: Noova como base, agregar datos de Netsuite
-            df_consolidated = df_noova_combined.merge(
-                df_netsuite,
-                on='numero_factura',
-                how='left'
-            )
+            if df_noova_combined is not None and df_netsuite_combined is not None:
+                df_consolidated = df_noova_combined.merge(
+                    df_netsuite_combined,
+                    on='numero_factura',
+                    how='left'
+                )
+            elif df_noova_combined is not None:
+                # Solo hay datos Noova
+                df_consolidated = df_noova_combined.copy()
+                logger.warning("⚠️ Consolidación solo con datos de Noova (sin Netsuite)")
+            elif df_netsuite_combined is not None:
+                # Solo hay datos Netsuite
+                df_consolidated = df_netsuite_combined.copy()
+                logger.warning("⚠️ Consolidación solo con datos de Netsuite (sin Noova)")
+            else:
+                # No hay datos de ninguno
+                raise ValueError("No hay datos para consolidar. Debes cargar al menos un archivo.")
 
             logger.info(f"🔗 JOIN completado: {len(df_consolidated)} registros")
 

@@ -7,6 +7,14 @@
       "valor": "Importe (moneda extranjera)"
     }
   },
+  "netsuite_nc": {
+    "sheet_name": "VistapredeterminadaTransaccin",
+    "columns": {
+      "numero_factura": "Número de documento",
+      "moneda": "Moneda",
+      "valor": "Importe (moneda extranjera)"
+    }
+  },
   "noova_facturas": {
     "sheet_name": "Documentos",
     "columns": {

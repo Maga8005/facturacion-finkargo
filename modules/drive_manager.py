@@ -22,7 +22,13 @@ class DriveManager:
 
     # Permisos completos para leer facturas existentes y crear archivos maestros
     SCOPES = ['https://www.googleapis.com/auth/drive']
-    
+
+    # Nombres de carpetas y archivos
+    FOLDER_REPORTES = "Reportes Facturación"
+    FOLDER_FACTURACION = "Facturación"
+    FOLDER_FACTURAS_PDF = "Facturas PDF"
+    MASTER_FILE_NAME = "Archivo control facturacion mensual Finkargo Def"
+
     def __init__(self):
         """Inicializa la conexión con Google Drive"""
         self.service = None
@@ -504,6 +510,253 @@ class DriveManager:
         except Exception as e:
             st.error(f"Error al subir archivo: {str(e)}")
             return None
+
+    def get_master_file_metadata(self) -> Optional[Dict]:
+        """Busca el archivo Master en la carpeta de Facturación y devuelve su metadata"""
+        if not self.is_authenticated():
+            return None
+
+        try:
+            # Buscar carpeta "Facturación"
+            folder_query = f"name='{self.FOLDER_FACTURACION}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+
+            # Si hay un folder_id configurado, buscar dentro de él
+            if self.folder_id:
+                folder_query += f" and '{self.folder_id}' in parents"
+
+            folder_results = self.service.files().list(
+                q=folder_query,
+                pageSize=1,
+                fields="files(id, name)"
+            ).execute()
+
+            folders = folder_results.get('files', [])
+            if not folders:
+                st.warning(f"⚠️ No se encontró la carpeta '{self.FOLDER_FACTURACION}'")
+                return None
+
+            facturacion_folder_id = folders[0]['id']
+
+            # Buscar el archivo Master dentro de la carpeta Facturación
+            # Usar "contains" para ser más flexible con el nombre exacto y extensiones
+            file_query = f"name contains '{self.MASTER_FILE_NAME}' and trashed=false and '{facturacion_folder_id}' in parents"
+
+            file_results = self.service.files().list(
+                q=file_query,
+                pageSize=10,  # Traer hasta 10 resultados por si hay múltiples versiones
+                fields="files(id, name, createdTime, modifiedTime, size, webViewLink)",
+                orderBy="modifiedTime desc"  # Ordenar por fecha de modificación (más reciente primero)
+            ).execute()
+
+            files = file_results.get('files', [])
+            if not files:
+                # Si no se encuentra, intentar búsqueda más amplia
+                st.info(f"🔍 Buscando variaciones del nombre del archivo...")
+
+                # Listar todos los archivos Excel en la carpeta para debug
+                all_files_query = f"(mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='application/vnd.ms-excel') and trashed=false and '{facturacion_folder_id}' in parents"
+
+                all_files_results = self.service.files().list(
+                    q=all_files_query,
+                    pageSize=20,
+                    fields="files(id, name)",
+                    orderBy="modifiedTime desc"
+                ).execute()
+
+                all_files = all_files_results.get('files', [])
+
+                if all_files:
+                    st.warning("📋 Archivos Excel encontrados en la carpeta 'Facturación':")
+                    for f in all_files[:10]:  # Mostrar hasta 10
+                        st.caption(f"  • {f['name']}")
+                    st.info("💡 Verifica el nombre exacto del archivo y actualiza la configuración si es necesario.")
+
+                return None
+
+            # Tomar el archivo más reciente
+            file = files[0]
+
+            # Si hay múltiples archivos, avisar
+            if len(files) > 1:
+                st.info(f"ℹ️ Se encontraron {len(files)} archivos que coinciden. Usando el más reciente: {file['name']}")
+
+            return {
+                'id': file['id'],
+                'nombre': file['name'],
+                'fecha_creacion': file.get('createdTime', ''),
+                'ultima_modificacion': file.get('modifiedTime', ''),
+                'tamano': self._format_size(file.get('size', 0)),
+                'link': file.get('webViewLink', '')
+            }
+
+        except Exception as e:
+            raise Exception(f"Error al buscar archivo Master: {str(e)}")
+
+    def read_master_file(self) -> Optional[Dict[str, pd.DataFrame]]:
+        """Lee el archivo Master de Google Drive y devuelve un diccionario con los DataFrames por hoja"""
+        if not self.is_authenticated():
+            return None
+
+        try:
+            # Obtener metadata del archivo
+            master_metadata = self.get_master_file_metadata()
+            if not master_metadata:
+                return None
+
+            # Descargar el archivo
+            file_content = self.download_file(master_metadata['id'], master_metadata['nombre'])
+            if not file_content:
+                return None
+
+            # Leer el Excel desde bytes
+            excel_file = io.BytesIO(file_content)
+
+            # SOLO leer las dos hojas específicas de facturas
+            hojas_a_leer = [
+                "Relacion facturas costos fijos",
+                "Relacion facturas mandato"
+            ]
+
+            excel_data = pd.ExcelFile(excel_file)
+            dataframes = {}
+
+            # Leer solo las hojas específicas
+            # IMPORTANTE: header=2 porque las columnas están en la fila 3 (pandas cuenta desde 0)
+            for sheet_name in hojas_a_leer:
+                if sheet_name in excel_data.sheet_names:
+                    df = pd.read_excel(excel_file, sheet_name=sheet_name, header=2)
+                    dataframes[sheet_name] = df
+                    st.info(f"✅ Hoja '{sheet_name}' cargada: {len(df):,} registros")
+                else:
+                    st.warning(f"⚠️ Hoja '{sheet_name}' no encontrada en el archivo")
+
+            if not dataframes:
+                st.error("❌ No se encontraron las hojas esperadas en el archivo")
+                st.info("📋 Hojas disponibles en el archivo:")
+                for name in excel_data.sheet_names:
+                    st.caption(f"  • {name}")
+                return None
+
+            return dataframes
+
+        except Exception as e:
+            st.error(f"Error al leer archivo Master: {str(e)}")
+            import traceback
+            st.code(traceback.format_exc())
+            return None
+
+    def save_processed_data(self, consolidated_data: pd.DataFrame, datos_por_hoja: Dict,
+                           stats: Dict, metadata: Dict, folder_id: str) -> Optional[str]:
+        """Guarda un snapshot de los datos procesados como JSON en Drive"""
+        if not self.is_authenticated():
+            return None
+
+        try:
+            # Crear un diccionario con toda la información
+            snapshot = {
+                'metadata': metadata,
+                'stats': stats,
+                'datos_por_hoja_info': {
+                    hoja: {
+                        'registros': len(df),
+                        'columnas': list(df.columns)
+                    }
+                    for hoja, df in datos_por_hoja.items()
+                }
+            }
+
+            # Convertir a JSON
+            json_content = json.dumps(snapshot, indent=2, default=str)
+            json_bytes = json_content.encode('utf-8')
+
+            # Nombre del archivo snapshot
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
+            snapshot_name = f"Snapshot_Data_{timestamp}.json"
+
+            # Subir a Drive
+            result = self.upload_file(json_bytes, snapshot_name, folder_id)
+
+            if result:
+                return result['id']
+            return None
+
+        except Exception as e:
+            st.error(f"Error al guardar snapshot: {str(e)}")
+            return None
+
+    def search_pdfs_in_facturas_folder(self, invoice_numbers: List[str]) -> List[Dict]:
+        """Busca PDFs específicamente en la carpeta 'Facturas PDF'"""
+        if not self.is_authenticated():
+            return []
+
+        try:
+            # Buscar carpeta "Facturas PDF"
+            folder_query = f"name='{self.FOLDER_FACTURAS_PDF}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+
+            # Si hay un folder_id configurado, buscar dentro de él
+            if self.folder_id:
+                folder_query += f" and '{self.folder_id}' in parents"
+
+            folder_results = self.service.files().list(
+                q=folder_query,
+                pageSize=1,
+                fields="files(id, name)"
+            ).execute()
+
+            folders = folder_results.get('files', [])
+            if not folders:
+                st.warning(f"⚠️ No se encontró la carpeta '{self.FOLDER_FACTURAS_PDF}'")
+                return []
+
+            facturas_folder_id = folders[0]['id']
+
+            # Buscar PDFs dentro de la carpeta
+            invoices_found = []
+
+            for invoice_num in invoice_numbers:
+                try:
+                    # Buscar el PDF por nombre
+                    query = f"name contains '{invoice_num}' and mimeType='application/pdf' and trashed=false and '{facturas_folder_id}' in parents"
+
+                    results = self.service.files().list(
+                        q=query,
+                        pageSize=1,
+                        fields="files(id, name, size, webViewLink)"
+                    ).execute()
+
+                    files = results.get('files', [])
+
+                    if files:
+                        file = files[0]
+                        invoices_found.append({
+                            'numero_factura': invoice_num,
+                            'encontrado': True,
+                            'id': file['id'],
+                            'nombre': file['name'],
+                            'tamano': self._format_size(file.get('size', 0)),
+                            'link_ver': file.get('webViewLink', '')
+                        })
+                    else:
+                        invoices_found.append({
+                            'numero_factura': invoice_num,
+                            'encontrado': False
+                        })
+
+                    # Pequeña pausa para no saturar la API
+                    time.sleep(0.1)
+
+                except Exception as e:
+                    invoices_found.append({
+                        'numero_factura': invoice_num,
+                        'encontrado': False,
+                        'error': str(e)
+                    })
+
+            return invoices_found
+
+        except Exception as e:
+            st.error(f"Error al buscar en carpeta Facturas PDF: {str(e)}")
+            return []
 
     def list_master_files(self, folder_id: str = None, limit: int = 10) -> List[Dict]:
         """Lista archivos maestros generados (con timestamp en el nombre)"""
