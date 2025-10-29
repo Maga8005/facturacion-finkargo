@@ -26,6 +26,7 @@
       "estado": "ESTADO",
       "envio": "ENVIO TERCERO",
       "codigo_operacion": "ORDEN DE COMPRA",
+      "codigo_producto": "PRODUCTO",
       "concepto": "NOMBRE PRODUCTO"
     }
   },
@@ -40,6 +41,7 @@
       "estado": "ESTADO",
       "envio": "ENVIO TERCERO",
       "codigo_operacion": "ORDEN DE COMPRA",
+      "codigo_producto": "PRODUCTO",
       "concepto": "NOMBRE PRODUCTO"
     }
   }

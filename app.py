@@ -737,7 +737,8 @@ def render_file_upload_section():
                                     # Inicializar procesador
                                     processor = FileProcessor(
                                         column_mapping_path='config/column_mapping.json',
-                                        classification_rules_path='config/classification_rules.json'
+                                        classification_rules_path='config/classification_rules.json',
+                                        product_classification_path='config/product_classification.json'
                                     )
 
                                     # Leer archivos Netsuite Facturas (opcional)

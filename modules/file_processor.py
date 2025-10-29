@@ -25,13 +25,14 @@ class FileProcessor:
     - Notas de Crédito (.xlsx)
     """
 
-    def __init__(self, column_mapping_path: str, classification_rules_path: str):
+    def __init__(self, column_mapping_path: str, classification_rules_path: str, product_classification_path: str = 'config/product_classification.json'):
         """
         Inicializa el procesador cargando configuraciones
 
         Args:
             column_mapping_path: Ruta al JSON de mapeo de columnas
             classification_rules_path: Ruta al JSON de reglas de clasificación
+            product_classification_path: Ruta al JSON de clasificación de productos
         """
         try:
             with open(column_mapping_path, 'r', encoding='utf-8') as f:
@@ -39,6 +40,9 @@ class FileProcessor:
 
             with open(classification_rules_path, 'r', encoding='utf-8') as f:
                 self.classification_rules = json.load(f)
+
+            with open(product_classification_path, 'r', encoding='utf-8') as f:
+                self.product_classification = json.load(f)
 
             logger.info("✅ Configuraciones cargadas correctamente")
         except FileNotFoundError as e:
@@ -190,6 +194,7 @@ class FileProcessor:
                 cols['estado']: 'estado',
                 cols['envio']: 'envio',
                 cols['codigo_operacion']: 'codigo_operacion',
+                cols['codigo_producto']: 'codigo_producto',
                 cols['concepto']: 'concepto'
             })
 
@@ -197,7 +202,7 @@ class FileProcessor:
             columnas_resultado = [
                 'fecha_facturacion', 'numero_factura', 'nit_cliente',
                 'nombre_cliente', 'email_cliente', 'estado', 'envio',
-                'codigo_operacion', 'concepto'
+                'codigo_operacion', 'codigo_producto', 'concepto'
             ]
 
             df_result = df_renamed[columnas_resultado].copy()
@@ -267,9 +272,70 @@ class FileProcessor:
 
         return None
 
+    def normalize_product_code(self, codigo_producto) -> Optional[str]:
+        """
+        Normaliza el código de producto eliminando el cero inicial
+
+        Args:
+            codigo_producto: Código de producto (ej: '0108', 0108, 108, '108')
+
+        Returns:
+            Código normalizado como string (ej: '108') o None si no es válido
+        """
+        if pd.isna(codigo_producto):
+            return None
+
+        try:
+            # Convertir a string y eliminar espacios
+            codigo_str = str(codigo_producto).strip()
+
+            # Si es 'nan', retornar None
+            if codigo_str.lower() == 'nan':
+                return None
+
+            # Convertir a entero y luego a string para eliminar ceros iniciales
+            codigo_int = int(float(codigo_str))
+            return str(codigo_int)
+        except (ValueError, TypeError):
+            return None
+
+    def classify_by_product_code(self, codigo_producto) -> Tuple[str, str, str]:
+        """
+        Clasifica un producto según su código usando el archivo product_classification.json
+
+        Args:
+            codigo_producto: Código del producto a clasificar
+
+        Returns:
+            Tupla (categoria, columna_destino, descripcion)
+        """
+        # Normalizar código de producto
+        codigo_normalizado = self.normalize_product_code(codigo_producto)
+
+        if not codigo_normalizado:
+            return ('sin_clasificar', 'Sin Clasificar', 'Sin codigo producto')
+
+        # Buscar en la clasificación de productos
+        productos = self.product_classification.get('clasificacion_productos', {})
+
+        if codigo_normalizado in productos:
+            producto_info = productos[codigo_normalizado]
+            categoria = producto_info.get('categoria', 'sin_clasificar')
+            descripcion = producto_info.get('descripcion', 'Sin descripcion')
+
+            # Obtener nombre de columna destino
+            mapeo_columnas = self.product_classification.get('mapeo_categoria_columna', {})
+            columna_destino = mapeo_columnas.get(categoria, 'Sin Clasificar')
+
+            return (categoria, columna_destino, descripcion)
+
+        # Si no se encuentra el código, es no clasificado
+        return ('sin_clasificar', 'Sin Clasificar', f'Codigo {codigo_normalizado} no encontrado')
+
     def classify_concept(self, concepto: str) -> Tuple[str, str]:
         """
         Clasifica un concepto según las reglas de clasificación
+        DEPRECADO: Ahora se usa classify_by_product_code
 
         Args:
             concepto: Texto del concepto a clasificar
@@ -400,10 +466,11 @@ class FileProcessor:
             df_consolidated['prefijo'] = df_consolidated['numero_factura'].apply(self.extract_prefix)
             df_consolidated['consecutivo'] = df_consolidated['numero_factura'].apply(self.extract_consecutive)
 
-            # Clasificar conceptos
-            clasificacion = df_consolidated['concepto'].apply(self.classify_concept)
+            # Clasificar por código de producto (nuevo método)
+            clasificacion = df_consolidated['codigo_producto'].apply(self.classify_by_product_code)
             df_consolidated['categoria'] = clasificacion.apply(lambda x: x[0])
             df_consolidated['columna_destino'] = clasificacion.apply(lambda x: x[1])
+            df_consolidated['descripcion_producto'] = clasificacion.apply(lambda x: x[2])
 
             # Determinar tipo de factura y hoja destino según prefijo
             tipo_factura_map = self.classification_rules.get('tipo_factura_por_prefijo', {})
@@ -488,6 +555,8 @@ class FileProcessor:
         df['Seguro + Iva'] = 0.0
         df['Int. Corriente Facturado FK'] = 0.0
         df['Int. Mora Facturado FK'] = 0.0
+        df['Otros Valor'] = 0.0
+        df['Otros Concepto'] = ''
 
         # Distribuir valores según categoría
         for idx, row in df.iterrows():
@@ -503,8 +572,11 @@ class FileProcessor:
                     df.at[idx, 'Int. Corriente Facturado FK'] = valor
                 elif categoria == 'intereses_mora':
                     df.at[idx, 'Int. Mora Facturado FK'] = valor
+                elif categoria == 'otros':
+                    df.at[idx, 'Otros Valor'] = valor
+                    df.at[idx, 'Otros Concepto'] = row.get('descripcion_producto', '')
 
-        # Calcular Valor Neto Facturado (suma de B+C+D+E+F)
+        # Calcular Valor Neto Facturado (suma de B+C+D+E+F+Otros)
         # Asumiendo que Retención en la Fuente es 0 por ahora
         df['(-) Retencio n en la Fuente'] = 0.0
 
@@ -513,6 +585,7 @@ class FileProcessor:
             df['Seguro + Iva'] +
             df['Int. Corriente Facturado FK'] +
             df['Int. Mora Facturado FK'] +
+            df['Otros Valor'] +
             df['(-) Retencio n en la Fuente']
         )
 
@@ -530,6 +603,9 @@ class FileProcessor:
             'Validacion Consecutivo': df['consecutivo'],
             'Revision': '',  # Campo vacío para revisión manual
             'Moneda': df['moneda'],
+            'Codigo Tercero': df['nit_cliente'],
+            'Otros Concepto': df['Otros Concepto'],
+            'Otros Valor': df['Otros Valor'],
             'Estado': df['estado'],
             'Envio': df['envio'],
             'Fac de la nota Credito': df['fuente_noova'].apply(
@@ -551,6 +627,8 @@ class FileProcessor:
         # Inicializar columnas de valores
         df['Interés Corriente Facturado'] = 0.0
         df['Interés Mora Facturado Mandato'] = 0.0
+        df['Otros Valor'] = 0.0
+        df['Otros Concepto'] = ''
 
         # Distribuir valores según categoría
         for idx, row in df.iterrows():
@@ -562,11 +640,15 @@ class FileProcessor:
                     df.at[idx, 'Interés Corriente Facturado'] = valor
                 elif categoria == 'intereses_mora':
                     df.at[idx, 'Interés Mora Facturado Mandato'] = valor
+                elif categoria == 'otros':
+                    df.at[idx, 'Otros Valor'] = valor
+                    df.at[idx, 'Otros Concepto'] = row.get('descripcion_producto', '')
 
         # Calcular Valor Neto Facturado
         df['Valor Neto Facturado'] = (
             df['Interés Corriente Facturado'] +
-            df['Interés Mora Facturado Mandato']
+            df['Interés Mora Facturado Mandato'] +
+            df['Otros Valor']
         )
 
         # Calcular Mes facturación (formato: 'ago-25')
@@ -586,6 +668,9 @@ class FileProcessor:
             'Estado': df['estado'],
             'Envio': df['envio'],
             'Moneda': df['moneda'],
+            'Codigo Tercero': df['nit_cliente'],
+            'Otros Concepto': df['Otros Concepto'],
+            'Otros Valor': df['Otros Valor'],
             'Fac de la nota Credito': df['fuente_noova'].apply(
                 lambda x: 'Nota Credito' if x == 'notas_credito' else ''
             )
