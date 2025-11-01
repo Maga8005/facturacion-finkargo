@@ -8,6 +8,7 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from google.oauth2.credentials import Credentials
+from google.oauth2 import service_account
 import io
 import pandas as pd
 from typing import List, Dict, Optional
@@ -30,25 +31,44 @@ class DriveManager:
     MASTER_FILE_NAME = "Archivo control facturacion mensual Finkargo Def"
 
     def __init__(self):
-        """Inicializa la conexión con Google Drive"""
+        """Inicializa la conexión con Google Drive usando cuenta de servicio"""
         self.service = None
         self.folder_id = st.secrets.get("drive_folder_id", "")
         self.creds = None
-        self.token_file = 'token.json'  # Archivo para persistir credenciales
 
-        # Intentar cargar credenciales desde archivo primero
-        self._load_credentials_from_file()
+        # Autenticar con cuenta de servicio automáticamente
+        self._authenticate_with_service_account()
 
-        # Si no hay en archivo, intentar desde session_state
-        if not self.creds and 'google_drive_creds' in st.session_state:
-            try:
-                self.creds = st.session_state.google_drive_creds
-                self.service = build('drive', 'v3', credentials=self.creds)
-                # Guardar en archivo para próximas sesiones
-                self._save_credentials_to_file()
-            except:
-                pass
-    
+    def _authenticate_with_service_account(self):
+        """Autentica con Google Drive usando cuenta de servicio"""
+        try:
+            # Ruta al archivo de credenciales de la cuenta de servicio
+            service_account_file = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)),
+                'config',
+                'service_account.json'
+            )
+
+            # Verificar que el archivo existe
+            if not os.path.exists(service_account_file):
+                st.error(f"❌ No se encontró el archivo de cuenta de servicio en: {service_account_file}")
+                return False
+
+            # Crear credenciales desde el archivo de cuenta de servicio
+            self.creds = service_account.Credentials.from_service_account_file(
+                service_account_file,
+                scopes=self.SCOPES
+            )
+
+            # Construir el servicio de Drive
+            self.service = build('drive', 'v3', credentials=self.creds)
+
+            return True
+
+        except Exception as e:
+            st.error(f"❌ Error al autenticar con cuenta de servicio: {str(e)}")
+            return False
+
     def authenticate(self):
         """Autentica con Google Drive usando OAuth"""
         
@@ -252,8 +272,14 @@ class DriveManager:
             self.service = None
 
     def is_authenticated(self) -> bool:
-        """Verifica si hay una conexión activa"""
+        """Verifica si hay una conexión activa con cuenta de servicio"""
         try:
+            # Con cuenta de servicio, si service está inicializado, está autenticado
+            if self.service is not None:
+                return True
+            # Si no está inicializado, intentar inicializar de nuevo
+            if self.creds is None:
+                self._authenticate_with_service_account()
             return self.service is not None
         except:
             return False
@@ -517,27 +543,15 @@ class DriveManager:
             return None
 
         try:
-            # Buscar carpeta "Facturación"
-            folder_query = f"name='{self.FOLDER_FACTURACION}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-
-            # Si hay un folder_id configurado, buscar dentro de él
-            if self.folder_id:
-                folder_query += f" and '{self.folder_id}' in parents"
-
-            folder_results = self.service.files().list(
-                q=folder_query,
-                pageSize=1,
-                fields="files(id, name)"
-            ).execute()
-
-            folders = folder_results.get('files', [])
-            if not folders:
-                st.warning(f"⚠️ No se encontró la carpeta '{self.FOLDER_FACTURACION}'")
+            # Usar el folder_id configurado directamente (carpeta "Facturacion" raíz)
+            # El archivo Master está en la carpeta raíz, no en una subcarpeta
+            if not self.folder_id:
+                st.error("❌ No se ha configurado el folder_id en secrets.toml")
                 return None
 
-            facturacion_folder_id = folders[0]['id']
+            facturacion_folder_id = self.folder_id
 
-            # Buscar el archivo Master dentro de la carpeta Facturación
+            # Buscar el archivo Master dentro de la carpeta Facturacion
             # Usar "contains" para ser más flexible con el nombre exacto y extensiones
             file_query = f"name contains '{self.MASTER_FILE_NAME}' and trashed=false and '{facturacion_folder_id}' in parents"
 
@@ -553,23 +567,39 @@ class DriveManager:
                 # Si no se encuentra, intentar búsqueda más amplia
                 st.info(f"🔍 Buscando variaciones del nombre del archivo...")
 
-                # Listar todos los archivos Excel en la carpeta para debug
-                all_files_query = f"(mimeType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' or mimeType='application/vnd.ms-excel') and trashed=false and '{facturacion_folder_id}' in parents"
+                # Listar TODOS los archivos en la carpeta para debug (no solo Excel)
+                all_files_query = f"trashed=false and '{facturacion_folder_id}' in parents"
 
                 all_files_results = self.service.files().list(
                     q=all_files_query,
-                    pageSize=20,
-                    fields="files(id, name)",
-                    orderBy="modifiedTime desc"
+                    pageSize=50,
+                    fields="files(id, name, mimeType)",
+                    orderBy="name"
                 ).execute()
 
                 all_files = all_files_results.get('files', [])
 
                 if all_files:
-                    st.warning("📋 Archivos Excel encontrados en la carpeta 'Facturación':")
-                    for f in all_files[:10]:  # Mostrar hasta 10
-                        st.caption(f"  • {f['name']}")
-                    st.info("💡 Verifica el nombre exacto del archivo y actualiza la configuración si es necesario.")
+                    st.warning(f"📋 Todos los archivos y carpetas encontrados en 'Facturacion' ({len(all_files)}):")
+
+                    # Separar carpetas y archivos
+                    carpetas = [f for f in all_files if 'folder' in f.get('mimeType', '')]
+                    archivos = [f for f in all_files if 'folder' not in f.get('mimeType', '')]
+
+                    if carpetas:
+                        st.write("📁 **Carpetas:**")
+                        for f in carpetas:
+                            st.caption(f"  • {f['name']}")
+
+                    if archivos:
+                        st.write("📄 **Archivos:**")
+                        for f in archivos[:15]:  # Mostrar hasta 15
+                            st.caption(f"  • {f['name']}")
+
+                    st.info("💡 Verifica el nombre exacto del archivo Master y actualiza la configuración si es necesario.")
+                else:
+                    st.error("❌ No se encontró ningún archivo en la carpeta 'Facturacion'")
+                    st.caption(f"Folder ID usado: {facturacion_folder_id}")
 
                 return None
 

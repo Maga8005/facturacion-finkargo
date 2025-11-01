@@ -8,6 +8,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from modules.drive_manager import DriveManager
 from modules.file_processor import FileProcessor
+from modules.simple_auth import SimpleAuthManager
 import tempfile
 import os
 import time
@@ -110,6 +111,51 @@ def load_css():
 # Aplicar estilos
 load_css()
 
+# ==================== SISTEMA DE AUTENTICACIÓN ====================
+
+# Inicializar gestor de autenticación
+if 'auth_manager' not in st.session_state:
+    st.session_state.auth_manager = SimpleAuthManager()
+
+auth_manager = st.session_state.auth_manager
+
+# Verificar autenticación
+if not auth_manager.login():
+    st.stop()  # Detener ejecución si no está autenticado
+
+# Usuario autenticado - Mostrar botón de logout en sidebar
+auth_manager.show_user_info_sidebar()
+
+# ==================== APLICACIÓN PRINCIPAL ====================
+
+# Botón de logout en la parte superior
+username = auth_manager.get_current_user()
+if username:
+    # Header con nombre de usuario
+    st.markdown(f"""
+        <div style='display: flex;
+                    justify-content: flex-end;
+                    align-items: center;
+                    width: 100%;
+                    padding: 10px 0;
+                    margin-bottom: 10px;'>
+            <span style='color: #6B7280;
+                        font-size: 14px;
+                        margin-right: 15px;'>
+                👤 {username}
+            </span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Botón de salir
+    cols = st.columns([10, 1])
+    with cols[1]:
+        if st.button("🚪 Salir", key="logout_top", use_container_width=True, type="primary"):
+            auth_manager.logout()
+            st.rerun()
+
+    st.markdown("---")
+
 # Inicializar session state
 if 'consolidated_data' not in st.session_state:
     st.session_state.consolidated_data = None
@@ -129,11 +175,20 @@ if 'master_loaded' not in st.session_state:
     st.session_state.master_loaded = False
 
 # Función helper para Drive Manager
+@st.cache_resource
+def get_drive_manager_cached():
+    """Obtener o crear instancia de DriveManager (con caché)"""
+    try:
+        return DriveManager()
+    except Exception as e:
+        st.error(f"Error al inicializar DriveManager: {str(e)}")
+        return None
+
 def get_drive_manager():
     """Obtener o crear instancia de DriveManager"""
     try:
         if st.session_state.drive_manager is None:
-            st.session_state.drive_manager = DriveManager()
+            st.session_state.drive_manager = get_drive_manager_cached()
         return st.session_state.drive_manager
     except:
         return None
@@ -1075,19 +1130,34 @@ with tab2:
 
             # Botón para cargar datos
             st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
-            if st.button("📥 Cargar Datos del Master", type="primary", use_container_width=True, key="btn_cargar_master"):
-                with st.spinner("⏳ Descargando y procesando archivo Master... Esto puede tomar unos segundos."):
-                    dataframes_master = drive_manager.read_master_file()
 
-                    if dataframes_master:
-                        # Guardar en session_state
-                        st.session_state.master_data = dataframes_master
-                        st.session_state.master_loaded = True
+            # Verificar si ya hay datos cargados
+            if st.session_state.get('master_loaded') and st.session_state.get('master_data'):
+                st.success("✅ Datos del Master ya cargados en memoria")
+                col1, col2 = st.columns(2)
+                with col1:
+                    total_registros = sum(len(df) for df in st.session_state.master_data.values())
+                    st.metric("Registros en memoria", f"{total_registros:,}")
+                with col2:
+                    if st.button("🔄 Recargar Datos", use_container_width=True, key="btn_recargar_master"):
+                        st.session_state.master_loaded = False
+                        st.session_state.master_data = None
+                        st.rerun()
+            else:
+                if st.button("📥 Cargar Datos del Master", type="primary", use_container_width=True, key="btn_cargar_master"):
+                    with st.spinner("⏳ Descargando y procesando archivo Master... Esto puede tomar unos segundos."):
+                        dataframes_master = drive_manager.read_master_file()
 
-                        st.balloons()
-                        st.success("✅ ¡Archivo Master cargado exitosamente!")
-                    else:
-                        st.error("❌ Error al cargar el archivo Master")
+                        if dataframes_master:
+                            # Guardar en session_state
+                            st.session_state.master_data = dataframes_master
+                            st.session_state.master_loaded = True
+
+                            st.balloons()
+                            st.success("✅ ¡Archivo Master cargado exitosamente!")
+                            st.rerun()  # Recargar para mostrar el estado actualizado
+                        else:
+                            st.error("❌ Error al cargar el archivo Master")
 
             # Filtros y generación de reportes (solo si hay datos cargados)
             st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
