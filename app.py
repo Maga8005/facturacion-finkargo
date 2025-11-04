@@ -44,17 +44,12 @@ def load_css():
                 /* CSS v{timestamp} */
                 {css}
 
-                /* Fix adicional para forzar texto blanco en botones */
-                button[kind="primary"],
-                button[data-testid*="baseButton"],
-                .stButton button {{
+                /* Fix adicional para forzar texto blanco SOLO en botones primary */
+                button[kind="primary"] {{
                     color: white !important;
                 }}
 
-                button[kind="primary"] *,
-                button[data-testid*="baseButton"] *,
-                .stButton button *,
-                [data-testid="stButton"] * {{
+                button[kind="primary"] * {{
                     color: white !important;
                 }}
 
@@ -75,9 +70,8 @@ def load_css():
 
                     function forceWhiteButtonText() {
                         const doc = parentWindow.document;
-                        const buttons = doc.querySelectorAll(
-                            'button[kind="primary"], button[data-testid*="baseButton"], .stButton button, [data-testid="stButton"] button'
-                        );
+                        // Solo aplicar a botones primary
+                        const buttons = doc.querySelectorAll('button[kind="primary"]');
 
                         buttons.forEach(function(button) {
                             button.style.setProperty('color', 'white', 'important');
@@ -88,13 +82,71 @@ def load_css():
                         });
                     }
 
+                    function forceSidebarOpen() {
+                        const doc = parentWindow.document;
+
+                        // Buscar el sidebar
+                        const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
+
+                        if (sidebar) {
+                            // Forzar que esté visible
+                            sidebar.style.display = 'block';
+                            sidebar.style.visibility = 'visible';
+                            sidebar.style.opacity = '1';
+                            sidebar.setAttribute('aria-expanded', 'true');
+
+                            // Remover clases de colapsado
+                            sidebar.classList.remove('collapsed');
+                        }
+
+                        // OCULTAR COMPLETAMENTE el botón de toggle del sidebar
+                        const toggleButtons = doc.querySelectorAll(
+                            '[data-testid="collapsedControl"], button[data-testid="collapsedControl"], button[kind="header"], button[data-testid="baseButton-header"], .st-emotion-cache-qmp9ai, button.st-emotion-cache-qmp9ai, .e6f82ta8'
+                        );
+
+                        toggleButtons.forEach(function(btn) {
+                            btn.style.display = 'none';
+                            btn.style.visibility = 'hidden';
+                            btn.style.opacity = '0';
+                            btn.style.pointerEvents = 'none';
+                            btn.style.width = '0';
+                            btn.style.height = '0';
+                            btn.remove(); // Eliminar del DOM directamente
+                        });
+
+                        // También buscar por aria-label
+                        const ariaButtons = doc.querySelectorAll('button[aria-label*="sidebar"], button[aria-label*="Sidebar"]');
+                        ariaButtons.forEach(function(btn) {
+                            btn.style.display = 'none';
+                            btn.style.visibility = 'hidden';
+                            btn.remove();
+                        });
+
+                        // Buscar cualquier botón que esté justo antes o después del sidebar
+                        const sidebarButtons = doc.querySelectorAll('section[data-testid="stSidebar"] ~ button, section[data-testid="stSidebar"] + button');
+                        sidebarButtons.forEach(function(btn) {
+                            if (btn.innerText === '' || btn.querySelector('svg')) {
+                                btn.style.display = 'none';
+                                btn.remove();
+                            }
+                        });
+                    }
+
                     // Ejecutar después de cargar
                     setTimeout(forceWhiteButtonText, 500);
                     setTimeout(forceWhiteButtonText, 1000);
                     setTimeout(forceWhiteButtonText, 2000);
 
+                    setTimeout(forceSidebarOpen, 100);
+                    setTimeout(forceSidebarOpen, 500);
+                    setTimeout(forceSidebarOpen, 1000);
+                    setTimeout(forceSidebarOpen, 2000);
+
                     // Observer para cambios en el DOM
-                    const observer = new MutationObserver(forceWhiteButtonText);
+                    const observer = new MutationObserver(function() {
+                        forceWhiteButtonText();
+                        forceSidebarOpen();
+                    });
                     observer.observe(parentWindow.document.body, { childList: true, subtree: true });
                     </script>
                     """,
@@ -127,34 +179,6 @@ if not auth_manager.login():
 auth_manager.show_user_info_sidebar()
 
 # ==================== APLICACIÓN PRINCIPAL ====================
-
-# Botón de logout en la parte superior
-username = auth_manager.get_current_user()
-if username:
-    # Header con nombre de usuario
-    st.markdown(f"""
-        <div style='display: flex;
-                    justify-content: flex-end;
-                    align-items: center;
-                    width: 100%;
-                    padding: 10px 0;
-                    margin-bottom: 10px;'>
-            <span style='color: #6B7280;
-                        font-size: 14px;
-                        margin-right: 15px;'>
-                👤 {username}
-            </span>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Botón de salir
-    cols = st.columns([10, 1])
-    with cols[1]:
-        if st.button("🚪 Salir", key="logout_top", use_container_width=True, type="primary"):
-            auth_manager.logout()
-            st.rerun()
-
-    st.markdown("---")
 
 # Inicializar session state
 if 'consolidated_data' not in st.session_state:
@@ -508,16 +532,16 @@ st.markdown("<div style='margin-bottom: 24px;'></div>", unsafe_allow_html=True)
 with st.sidebar:
     st.markdown("### 🔐 Google Drive")
 
-    # Verificar si hay credenciales configuradas
+    # Verificar si hay service account configurada
     try:
-        client_id = st.secrets.get("client_id", "")
-        client_secret = st.secrets.get("client_secret", "")
+        import os
+        service_account_file = 'config/service_account.json'
 
-        if client_id and client_secret:
-            # Estado: Credenciales configuradas
+        if os.path.exists(service_account_file):
+            # Estado: Service Account configurada
             st.markdown("""
                 <div class='status-badge-success' style='width: 100%; text-align: center; margin-bottom: 12px;'>
-                    ✅ Credenciales configuradas
+                    ✅ Service Account configurada
                 </div>
             """, unsafe_allow_html=True)
 
@@ -532,27 +556,9 @@ with st.sidebar:
                 """, unsafe_allow_html=True)
 
                 st.caption("📁 Acceso completo a Google Drive")
-                st.caption("✓ Subir reportes")
                 st.caption("✓ Consultar archivo Master")
                 st.caption("✓ Buscar PDFs")
-
-                st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
-
-                # Botón para desconectar
-                if st.button("🔓 Desconectar", use_container_width=True, key="btn_disconnect"):
-                    # Eliminar credenciales del session state
-                    if 'google_drive_creds' in st.session_state:
-                        del st.session_state.google_drive_creds
-                    if 'drive_manager' in st.session_state:
-                        del st.session_state.drive_manager
-
-                    # Eliminar archivo de token persistente
-                    import os
-                    if os.path.exists('token.json'):
-                        os.remove('token.json')
-
-                    st.success("✅ Desconectado")
-                    st.rerun()
+                st.caption("✓ Generar reportes")
             else:
                 st.markdown("""
                     <div class='status-badge-warning' style='width: 100%; text-align: center; margin-bottom: 12px;'>
@@ -560,33 +566,20 @@ with st.sidebar:
                     </div>
                 """, unsafe_allow_html=True)
 
-                st.caption("Conéctate para:")
-                st.caption("• Subir reportes a Drive")
+                st.caption("Drive permite:")
                 st.caption("• Consultar archivo Master")
                 st.caption("• Buscar PDFs de facturas")
-
-                st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
-
-                # Botón para conectar
-                if st.button("🔑 Conectar con Google Drive", type="primary", use_container_width=True, key="btn_connect_sidebar"):
-                    if drive_manager_sidebar:
-                        with st.spinner("🔐 Autenticando..."):
-                            if drive_manager_sidebar.authenticate():
-                                st.success("✅ ¡Conectado!")
-                                st.balloons()
-                                st.rerun()
-                            else:
-                                st.error("❌ Error al conectar")
-                                st.caption("Verifica que aceptaste los permisos")
-                    else:
-                        st.error("❌ Error al inicializar Drive")
+                st.caption("• Generar reportes")
         else:
-            st.error("❌ Faltan credenciales")
+            st.error("❌ Falta archivo de credenciales")
             with st.expander("📖 ¿Cómo configurar?"):
-                st.code("""
-# En .streamlit/secrets.toml
-client_id = "tu-client-id"
-client_secret = "tu-client-secret"
+                st.markdown("""
+                Coloca el archivo `service_account.json` en:
+                ```
+                config/service_account.json
+                ```
+
+                Este archivo contiene las credenciales de la Service Account de Google Cloud.
                 """)
     except Exception as e:
         st.error("❌ Error en configuración")
@@ -744,7 +737,6 @@ def render_file_upload_section():
 
                 if st.button(
                     "🚀 Procesar Archivos",
-                    type="primary",
                     use_container_width=True,
                     disabled=not listo_para_procesar,
                     key="btn_procesar_archivos"
@@ -925,105 +917,26 @@ def render_file_upload_section():
 
         file_bytes = buffer_maestro.getvalue()
 
-        # Botones de acción con diseño mejorado
-        col_btn1, col_btn2 = st.columns(2)
-
-        with col_btn1:
-            st.markdown("""
-                <div style='background: #F5F8FE; border: 1px solid #77A1E2; border-radius: 8px; padding: 16px; margin-bottom: 12px;'>
-                    <div style='font-size: 16px; font-weight: 600; color: #0C147B; margin-bottom: 4px;'>
-                        ☁️ Generar y Subir a Drive
-                    </div>
-                    <div style='font-size: 13px; color: #6B7280;'>
-                        Sube automáticamente a Google Drive (recomendado)
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-
-            if st.button("☁️ Generar y Subir a Google Drive", type="primary", use_container_width=True, key="btn_generar_subir_master"):
-                drive_manager = get_drive_manager()
-
-                if drive_manager and drive_manager.is_authenticated():
-                    with st.spinner("📤 Subiendo archivos a Google Drive..."):
-                        # Crear/obtener carpeta "Reportes Facturación" dentro de finkargo
-                        folder_id = drive_manager.create_folder_if_not_exists(drive_manager.FOLDER_REPORTES)
-
-                        if folder_id:
-                            # Subir archivo Excel a la carpeta "Reportes Facturación"
-                            result = drive_manager.upload_file(file_bytes, file_name, folder_id)
-
-                            if result:
-                                st.success(f"✅ ¡Archivo Excel subido exitosamente a 'finkargo/{drive_manager.FOLDER_REPORTES}'!")
-
-                                # Guardar snapshot de datos procesados para poder cargarlos después
-                                with st.spinner("💾 Guardando snapshot de datos procesados..."):
-                                    data_result = drive_manager.save_processed_data(
-                                        consolidated_data=st.session_state.consolidated_data,
-                                        datos_por_hoja=datos_por_hoja,
-                                        stats=st.session_state.stats,
-                                        metadata=st.session_state.metadata if st.session_state.metadata else {},
-                                        folder_id=folder_id
-                                    )
-
-                                    if data_result:
-                                        st.success("✅ ¡Snapshot de datos guardado! Podrás cargar este reporte más tarde.")
-                                    else:
-                                        st.warning("⚠️ No se pudo guardar el snapshot de datos (no afecta el Excel)")
-
-                                st.markdown("---")
-
-                                st.markdown(f"**📄 Archivo:** {result['nombre']}")
-                                st.markdown(f"**📦 Tamaño:** {result['tamano']}")
-                                st.markdown(f"**📅 Fecha:** {timestamp}")
-                                st.markdown(f"**📂 Ubicación:** finkargo/{drive_manager.FOLDER_REPORTES}")
-
-                                st.link_button(
-                                    "🔗 Abrir en Google Drive",
-                                    result['link'],
-                                    use_container_width=True
-                                )
-
-                                st.info("💡 El archivo está en modo SOLO LECTURA. Para trabajar, descarga una copia o duplícalo en Drive.")
-                            else:
-                                st.error("❌ Error al subir el archivo")
-                        else:
-                            st.error(f"❌ Error al crear/obtener carpeta '{drive_manager.FOLDER_REPORTES}' en Drive")
-                else:
-                    st.warning("⚠️ Conecta con Google Drive primero")
-                    st.caption("👈 Usa el botón en la barra lateral izquierda")
-
-        with col_btn2:
-            st.markdown("""
-                <div style='background: #F9FAFB; border: 1px solid #D1D5DB; border-radius: 8px; padding: 16px; margin-bottom: 12px;'>
-                    <div style='font-size: 16px; font-weight: 600; color: #0C147B; margin-bottom: 4px;'>
-                        💾 Descargar Copia Local
-                    </div>
-                    <div style='font-size: 13px; color: #6B7280;'>
-                        Descarga el archivo a tu computadora
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-
-            st.download_button(
-                label="💾 Descargar Copia Local",
-                data=file_bytes,
-                file_name=file_name,
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True,
-                key="btn_descargar_local_master"
-            )
-
-        # Nota informativa
+        # Botón de descarga
         st.markdown("""
-            <div style='background: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 6px; padding: 12px; margin-top: 16px;'>
-                <div style='display: flex; align-items: center; gap: 8px;'>
-                    <div style='font-size: 20px;'>💡</div>
-                    <div style='font-size: 13px; color: #92400E;'>
-                        Al descargar creas una copia local que puede quedar desactualizada. Se recomienda usar Google Drive como fuente única de verdad.
-                    </div>
+            <div style='background: #F9FAFB; border: 1px solid #D1D5DB; border-radius: 8px; padding: 16px; margin-bottom: 12px;'>
+                <div style='font-size: 16px; font-weight: 600; color: #0C147B; margin-bottom: 4px;'>
+                    💾 Descargar Reporte
+                </div>
+                <div style='font-size: 13px; color: #6B7280;'>
+                    Descarga el archivo Excel a tu computadora
                 </div>
             </div>
         """, unsafe_allow_html=True)
+
+        st.download_button(
+            label="💾 Descargar Reporte",
+            data=file_bytes,
+            file_name=file_name,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+            key="btn_descargar_local_master"
+        )
 
         # VISTA PREVIA DEL REPORTE
         st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
@@ -1046,15 +959,26 @@ def render_file_upload_section():
 
 st.markdown("<div style='margin-top: 4rem;'></div>", unsafe_allow_html=True)
 
-# ==================== TABS PRINCIPALES ====================
-tab1, tab2 = st.tabs(["📁 Generar Reportes", "📊 Reportes desde Master"])
+# ==================== SELECTOR DE SECCIÓN (Mantiene estado después de rerun) ====================
+# Selector visual con radio buttons (Streamlit guarda automáticamente el estado con el key)
+opciones = ["📁 Generar Reportes", "📊 Reportes desde Master"]
+seleccion = st.radio(
+    "Selecciona una opción:",
+    options=opciones,
+    index=0,  # Por defecto: Generar Reportes
+    horizontal=True,
+    key="seccion_activa",
+    label_visibility="collapsed"
+)
 
-# ==================== TAB 1: GENERAR REPORTES ====================
-with tab1:
+st.markdown("<div style='margin-bottom: 2rem;'></div>", unsafe_allow_html=True)
+
+# ==================== SECCIÓN 1: GENERAR REPORTES ====================
+if seleccion == "📁 Generar Reportes":
     render_file_upload_section()
 
-# ==================== TAB 2: REPORTES DESDE MASTER ====================
-with tab2:
+# ==================== SECCIÓN 2: REPORTES DESDE MASTER ====================
+elif seleccion == "📊 Reportes desde Master":
     # Header mejorado
     st.markdown("""
         <div style='margin-bottom: 2rem;'>
@@ -1095,14 +1019,32 @@ with tab2:
             </div>
         """, unsafe_allow_html=True)
 
-        with st.spinner("🔍 Buscando archivo Master en Drive..."):
-            master_metadata = drive_manager.get_master_file_metadata()
+        # Usar caché para evitar búsquedas repetidas del Master
+        if 'master_metadata' not in st.session_state:
+            with st.spinner("🔍 Buscando archivo Master en Drive..."):
+                try:
+                    st.session_state.master_metadata = drive_manager.get_master_file_metadata()
+                except Exception as e:
+                    st.error(f"❌ Error al buscar archivo Master: {str(e)}")
+                    st.session_state.master_metadata = None
+
+        master_metadata = st.session_state.get('master_metadata')
 
         if not master_metadata:
             st.error("❌ No se encontró el archivo Master en la carpeta 'Facturación'")
             st.info(f"📂 Archivo esperado: **{drive_manager.MASTER_FILE_NAME}**")
             st.caption(f"Ubicación: finkargo/{drive_manager.FOLDER_FACTURACION}")
+
+            if st.button("🔄 Reintentar buscar Master", key="retry_master"):
+                if 'master_metadata' in st.session_state:
+                    del st.session_state.master_metadata
+                st.rerun()
         else:
+            # Botón para refrescar Master
+            if st.button("🔄 Refrescar archivo Master", key="refresh_master"):
+                if 'master_metadata' in st.session_state:
+                    del st.session_state.master_metadata
+                st.rerun()
             # Mostrar información del archivo Master con diseño mejorado
             st.markdown(f"""
                 <div style='background: white; border: 1px solid #D1D5DB; border-radius: 12px; padding: 20px; margin-bottom: 16px;'>
@@ -1144,7 +1086,7 @@ with tab2:
                         st.session_state.master_data = None
                         st.rerun()
             else:
-                if st.button("📥 Cargar Datos del Master", type="primary", use_container_width=True, key="btn_cargar_master"):
+                if st.button("📥 Cargar Datos del Master", use_container_width=True, key="btn_cargar_master"):
                     with st.spinner("⏳ Descargando y procesando archivo Master... Esto puede tomar unos segundos."):
                         dataframes_master = drive_manager.read_master_file()
 
@@ -1155,7 +1097,6 @@ with tab2:
 
                             st.balloons()
                             st.success("✅ ¡Archivo Master cargado exitosamente!")
-                            st.rerun()  # Recargar para mostrar el estado actualizado
                         else:
                             st.error("❌ Error al cargar el archivo Master")
 
@@ -1675,69 +1616,27 @@ with tab2:
 
                     st.markdown("---")
 
-                    # Opciones de descarga/subida
+                    # Opción de descarga
                     timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
                     nombre_archivo = f"Reporte_Master_{nombre_seleccion.replace(' ', '_')}_{timestamp}"
 
-                    col_down1, col_down2 = st.columns(2)
+                    st.markdown("### 📥 Descargar Reporte")
 
-                    with col_down1:
-                        st.markdown("### 📥 Descargar Excel")
+                    # Generar Excel
+                    buffer_excel = BytesIO()
+                    with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                        df_filtrado.to_excel(writer, sheet_name=nombre_seleccion[:31], index=False)
 
-                        # Generar Excel
-                        buffer_excel = BytesIO()
-                        with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                            df_filtrado.to_excel(writer, sheet_name=nombre_seleccion[:31], index=False)
-
-                        st.download_button(
-                            label="📥 Descargar Excel",
-                            data=buffer_excel.getvalue(),
-                            file_name=f"{nombre_archivo}.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
-                        )
-
-                    with col_down2:
-                        st.markdown("### 📤 Subir a Drive")
-
-                        if st.button("🚀 Subir a Google Drive", type="primary", use_container_width=True):
-                            with st.spinner("📤 Subiendo a Google Drive..."):
-                                # Crear/obtener carpeta "Reportes Facturación"
-                                folder_id = drive_manager.create_folder_if_not_exists(drive_manager.FOLDER_REPORTES)
-
-                                if folder_id:
-                                    # Subir archivo
-                                    result = drive_manager.upload_file(
-                                        buffer_excel.getvalue(),
-                                        f"{nombre_archivo}.xlsx",
-                                        folder_id
-                                    )
-
-                                    if result:
-                                        st.success(f"✅ ¡Archivo subido exitosamente!")
-                                        st.link_button(
-                                            "🔗 Abrir en Google Drive",
-                                            result['link'],
-                                            use_container_width=True
-                                        )
-                                    else:
-                                        st.error("❌ Error al subir el archivo")
-                                else:
-                                    st.error(f"❌ Error al crear/obtener carpeta '{drive_manager.FOLDER_REPORTES}'")
+                    st.download_button(
+                        label="📥 Descargar Excel",
+                        data=buffer_excel.getvalue(),
+                        file_name=f"{nombre_archivo}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
 
         # ========== BUSCAR PDFs EN DRIVE ==========
         st.markdown("<div style='margin-top: 2.5rem;'></div>", unsafe_allow_html=True)
-        st.markdown("""
-            <div class='card-info' style='padding: 24px; margin-bottom: 24px;'>
-                <h3 style='font-size: 20px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
-                    🔍 Buscar PDFs de Facturas
-                </h3>
-                <p style='font-size: 14px; color: #6B7280; margin-bottom: 0;'>
-                    Busca PDFs automáticamente desde el reporte o manualmente por número de factura
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
-
         try:
             drive_manager_pdf = get_drive_manager()
 
@@ -1761,7 +1660,7 @@ with tab2:
                 if st.session_state.get('master_loaded') and st.session_state.get('df_filtrado_master') is not None and not st.session_state.df_filtrado_master.empty:
                     df_filtrado = st.session_state.df_filtrado_master
 
-                    if st.button("🔍 Buscar PDFs del Reporte", type="primary", use_container_width=True, key="btn_search_from_report_master"):
+                    if st.button("🔍 Buscar PDFs del Reporte", use_container_width=True, key="btn_search_from_report_master"):
                         # Detectar columna de número de factura
                         columnas_factura_posibles = [
                             '# Factura',
@@ -1798,23 +1697,34 @@ with tab2:
 
                                         # Botón de descarga masiva
                                         st.markdown("### 📦 Descarga Masiva")
-                                        if st.button(
-                                            f"⬇️ Descargar todos ({len(found)}) en ZIP",
-                                            type="primary",
-                                            use_container_width=True,
-                                            key="btn_download_zip_auto"
-                                        ):
-                                            with st.spinner("Preparando descarga..."):
-                                                zip_content = drive_manager_pdf.download_multiple_files(found)
-                                                if zip_content:
-                                                    st.download_button(
-                                                        label=f"📥 Descargar ZIP ({len(found)} archivos)",
-                                                        data=zip_content,
-                                                        file_name=f"Facturas_Reporte_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-                                                        mime="application/zip",
-                                                        use_container_width=True,
-                                                        key="btn_final_download_zip_auto"
-                                                    )
+
+                                        # Crear barra de progreso
+                                        progress_zip = st.progress(0)
+                                        status_zip = st.empty()
+
+                                        # Descargar directamente con progreso
+                                        zip_content = drive_manager_pdf.download_multiple_files(
+                                            found,
+                                            progress_bar=progress_zip,
+                                            status_text=status_zip
+                                        )
+
+                                        # Limpiar progreso
+                                        progress_zip.empty()
+                                        status_zip.empty()
+
+                                        if zip_content:
+                                            st.success(f"✅ ZIP listo con {len(found)} archivos")
+                                            st.download_button(
+                                                label=f"📥 Descargar ZIP ({len(found)} archivos)",
+                                                data=zip_content,
+                                                file_name=f"Facturas_Reporte_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                                                mime="application/zip",
+                                                use_container_width=True,
+                                                key="btn_final_download_zip_auto"
+                                            )
+                                        else:
+                                            st.error("❌ No se pudo generar el ZIP")
 
                                         st.markdown("---")
                                         st.markdown("### 📄 PDFs Encontrados")
@@ -1894,23 +1804,34 @@ with tab2:
 
                                 # Botón de descarga masiva
                                 st.markdown("### 📦 Descarga Masiva")
-                                if st.button(
-                                    f"⬇️ Descargar todos ({len(found)}) en ZIP",
-                                    type="primary",
-                                    use_container_width=True,
-                                    key="btn_download_zip_manual"
-                                ):
-                                    with st.spinner("Preparando descarga..."):
-                                        zip_content = drive_manager_pdf.download_multiple_files(found)
-                                        if zip_content:
-                                            st.download_button(
-                                                label=f"📥 Descargar ZIP ({len(found)} archivos)",
-                                                data=zip_content,
-                                                file_name=f"Facturas_Manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-                                                mime="application/zip",
-                                                use_container_width=True,
-                                                key="btn_final_download_zip_manual"
-                                            )
+
+                                # Crear barra de progreso
+                                progress_zip_m = st.progress(0)
+                                status_zip_m = st.empty()
+
+                                # Descargar directamente con progreso
+                                zip_content = drive_manager_pdf.download_multiple_files(
+                                    found,
+                                    progress_bar=progress_zip_m,
+                                    status_text=status_zip_m
+                                )
+
+                                # Limpiar progreso
+                                progress_zip_m.empty()
+                                status_zip_m.empty()
+
+                                if zip_content:
+                                    st.success(f"✅ ZIP listo con {len(found)} archivos")
+                                    st.download_button(
+                                        label=f"📥 Descargar ZIP ({len(found)} archivos)",
+                                        data=zip_content,
+                                        file_name=f"Facturas_Manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                                        mime="application/zip",
+                                        use_container_width=True,
+                                        key="btn_final_download_zip_manual"
+                                    )
+                                else:
+                                    st.error("❌ No se pudo generar el ZIP")
 
                                 st.markdown("---")
                                 st.markdown("### 📄 PDFs Encontrados")

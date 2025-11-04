@@ -307,7 +307,9 @@ class DriveManager:
                     q=query,
                     pageSize=5,
                     fields="files(id, name, createdTime, size, webViewLink, mimeType)",
-                    orderBy="createdTime desc"
+                    orderBy="createdTime desc",
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True
                 ).execute()
                 
                 files = results.get('files', [])
@@ -376,7 +378,9 @@ class DriveManager:
                 q=final_query,
                 pageSize=100,
                 fields="files(id, name, createdTime, modifiedTime, size, webViewLink, webContentLink)",
-                orderBy="name"
+                orderBy="name",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True
             ).execute()
             
             files = results.get('files', [])
@@ -399,46 +403,92 @@ class DriveManager:
             return []
     
     def download_file(self, file_id: str, file_name: str) -> Optional[bytes]:
-        """Descarga un archivo individual"""
+        """Descarga un archivo individual desde carpetas compartidas"""
         if not self.is_authenticated() or not file_id:
             return None
-        
+
         try:
-            request = self.service.files().get_media(fileId=file_id)
+            # IMPORTANTE: supportsAllDrives=True es necesario para carpetas compartidas
+            request = self.service.files().get_media(
+                fileId=file_id,
+                supportsAllDrives=True
+            )
             file_buffer = io.BytesIO()
             downloader = MediaIoBaseDownload(file_buffer, request)
-            
+
             done = False
             while not done:
                 status, done = downloader.next_chunk()
-            
+
             file_buffer.seek(0)
             return file_buffer.getvalue()
-            
+
         except Exception as e:
-            st.error(f"Error al descargar {file_name}: {str(e)}")
+            st.error(f"❌ Error al descargar {file_name}: {str(e)}")
             return None
     
-    def download_multiple_files(self, invoices: List[Dict]) -> Optional[bytes]:
-        """Descarga múltiples archivos en ZIP"""
+    def download_multiple_files(self, invoices: List[Dict], progress_bar=None, status_text=None) -> Optional[bytes]:
+        """Descarga múltiples archivos en ZIP
+
+        Args:
+            invoices: Lista de diccionarios con información de PDFs
+            progress_bar: Barra de progreso de Streamlit (opcional)
+            status_text: Contenedor de texto de estado de Streamlit (opcional)
+
+        Returns:
+            Contenido del archivo ZIP en bytes
+        """
         if not self.is_authenticated():
+            st.error("❌ No autenticado con Drive")
             return None
-        
+
         try:
             zip_buffer = io.BytesIO()
-            
+            total = len([inv for inv in invoices if inv.get('encontrado') and inv.get('id')])
+            downloaded = 0
+            failed = []
+
+            if total == 0:
+                st.warning("⚠️ No hay archivos para descargar")
+                return None
+
             with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-                for invoice in invoices:
+                for idx, invoice in enumerate(invoices, 1):
                     if invoice.get('encontrado') and invoice.get('id'):
-                        file_content = self.download_file(invoice['id'], invoice['nombre'])
-                        if file_content:
-                            zip_file.writestr(invoice['nombre'], file_content)
-            
+                        # Actualizar progreso
+                        if progress_bar:
+                            progress_bar.progress(idx / total)
+                        if status_text:
+                            status_text.info(f"📥 Descargando {idx}/{total}: {invoice['nombre']}")
+
+                        try:
+                            file_content = self.download_file(invoice['id'], invoice['nombre'])
+
+                            if file_content:
+                                zip_file.writestr(invoice['nombre'], file_content)
+                                downloaded += 1
+                            else:
+                                failed.append(invoice['nombre'])
+                        except Exception as e:
+                            st.warning(f"⚠️ No se pudo descargar: {invoice['nombre']} - {str(e)}")
+                            failed.append(invoice['nombre'])
+
+            if status_text:
+                if downloaded > 0:
+                    status_text.success(f"✅ {downloaded} de {total} archivos descargados")
+                    if failed:
+                        st.warning(f"⚠️ {len(failed)} archivos no se pudieron descargar")
+                else:
+                    status_text.error("❌ No se pudo descargar ningún archivo")
+
+            if downloaded == 0:
+                return None
+
             zip_buffer.seek(0)
             return zip_buffer.getvalue()
-            
+
         except Exception as e:
-            st.error(f"Error al crear ZIP: {str(e)}")
+            st.error(f"❌ Error al crear ZIP: {str(e)}")
             return None
     
     def _format_size(self, size_bytes: int) -> str:
@@ -454,20 +504,30 @@ class DriveManager:
             return "N/A"
 
     def create_folder_if_not_exists(self, folder_name: str, parent_folder_id: str = None) -> Optional[str]:
-        """Crea una carpeta en Drive si no existe, o retorna el ID si ya existe"""
+        """Crea una carpeta en Drive si no existe, o retorna el ID si ya existe
+
+        IMPORTANTE: Con cuentas de servicio, SIEMPRE debe buscarse dentro de una carpeta
+        compartida. Si no se especifica parent_folder_id, se usa self.folder_id por defecto.
+        """
         if not self.is_authenticated():
             return None
 
         try:
-            # Buscar si la carpeta ya existe
-            query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
+            # Si no se especifica parent_folder_id, usar la carpeta raíz compartida
+            if not parent_folder_id:
+                parent_folder_id = self.folder_id
 
-            if parent_folder_id:
-                query += f" and '{parent_folder_id}' in parents"
+            if not parent_folder_id:
+                st.error("❌ Error: Se requiere un folder_id configurado para cuentas de servicio")
+                return None
+
+            # Buscar si la carpeta ya existe DENTRO de la carpeta compartida
+            query = f"name='{folder_name}' and mimeType='application/vnd.google-apps.folder' and trashed=false and '{parent_folder_id}' in parents"
 
             results = self.service.files().list(
                 q=query,
-                fields="files(id, name)"
+                fields="files(id, name)",
+                supportsAllDrives=True  # Soporte para Shared Drives
             ).execute()
 
             files = results.get('files', [])
@@ -476,28 +536,33 @@ class DriveManager:
                 # La carpeta ya existe
                 return files[0]['id']
 
-            # Crear nueva carpeta
+            # Crear nueva carpeta DENTRO de la carpeta compartida
             file_metadata = {
                 'name': folder_name,
-                'mimeType': 'application/vnd.google-apps.folder'
+                'mimeType': 'application/vnd.google-apps.folder',
+                'parents': [parent_folder_id]
             }
-
-            if parent_folder_id:
-                file_metadata['parents'] = [parent_folder_id]
 
             folder = self.service.files().create(
                 body=file_metadata,
-                fields='id'
+                fields='id',
+                supportsAllDrives=True  # Soporte para Shared Drives
             ).execute()
 
+            st.info(f"📁 Carpeta '{folder_name}' creada exitosamente")
             return folder.get('id')
 
         except Exception as e:
-            st.error(f"Error al crear carpeta: {str(e)}")
+            st.error(f"Error al buscar/crear carpeta '{folder_name}': {str(e)}")
             return None
 
     def upload_file(self, file_content: bytes, file_name: str, folder_id: str = None) -> Optional[Dict]:
-        """Sube un archivo a Google Drive"""
+        """Sube un archivo a Google Drive
+
+        IMPORTANTE: Con cuentas de servicio, SIEMPRE debe especificarse un folder_id
+        que esté compartido con la cuenta de servicio, ya que las cuentas de servicio
+        no tienen almacenamiento propio.
+        """
         if not self.is_authenticated():
             return None
 
@@ -506,10 +571,14 @@ class DriveManager:
 
             file_metadata = {'name': file_name}
 
+            # Con cuenta de servicio, SIEMPRE debemos especificar un parent folder compartido
             if folder_id:
                 file_metadata['parents'] = [folder_id]
             elif self.folder_id:
                 file_metadata['parents'] = [self.folder_id]
+            else:
+                st.error("❌ Error: Las cuentas de servicio requieren especificar una carpeta compartida para subir archivos")
+                return None
 
             # Crear media desde bytes
             media = MediaIoBaseUpload(
@@ -518,11 +587,12 @@ class DriveManager:
                 resumable=True
             )
 
-            # Subir archivo
+            # Subir archivo con soporte para Shared Drives y carpetas compartidas
             file = self.service.files().create(
                 body=file_metadata,
                 media_body=media,
-                fields='id, name, webViewLink, createdTime, size'
+                fields='id, name, webViewLink, createdTime, size',
+                supportsAllDrives=True  # CRÍTICO: Necesario para cuentas de servicio con carpetas compartidas
             ).execute()
 
             return {
@@ -559,7 +629,9 @@ class DriveManager:
                 q=file_query,
                 pageSize=10,  # Traer hasta 10 resultados por si hay múltiples versiones
                 fields="files(id, name, createdTime, modifiedTime, size, webViewLink)",
-                orderBy="modifiedTime desc"  # Ordenar por fecha de modificación (más reciente primero)
+                orderBy="modifiedTime desc",  # Ordenar por fecha de modificación (más reciente primero)
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True
             ).execute()
 
             files = file_results.get('files', [])
@@ -574,7 +646,9 @@ class DriveManager:
                     q=all_files_query,
                     pageSize=50,
                     fields="files(id, name, mimeType)",
-                    orderBy="name"
+                    orderBy="name",
+                    supportsAllDrives=True,
+                    includeItemsFromAllDrives=True
                 ).execute()
 
                 all_files = all_files_results.get('files', [])
@@ -714,57 +788,79 @@ class DriveManager:
             st.error(f"Error al guardar snapshot: {str(e)}")
             return None
 
-    def search_pdfs_in_facturas_folder(self, invoice_numbers: List[str]) -> List[Dict]:
-        """Busca PDFs específicamente en la carpeta 'Facturas PDF'"""
+    def search_pdfs_in_facturas_folder(self, invoice_numbers: List[str], progress_bar=None, status_text=None) -> List[Dict]:
+        """Busca PDFs recursivamente en toda la carpeta compartida
+
+        Busca en toda la jerarquía de carpetas, incluyendo:
+        - Año 2025/09. Septiembre/Facturacion Finkargo/
+        - Año 2024/01. Enero/Facturacion mandato/
+        - Etc.
+
+        Args:
+            invoice_numbers: Lista de números de factura a buscar
+            progress_bar: Barra de progreso de Streamlit (opcional)
+            status_text: Contenedor de texto de estado de Streamlit (opcional)
+
+        Returns:
+            Lista de diccionarios con información de PDFs encontrados/no encontrados
+        """
         if not self.is_authenticated():
             return []
 
         try:
-            # Buscar carpeta "Facturas PDF"
-            folder_query = f"name='{self.FOLDER_FACTURAS_PDF}' and mimeType='application/vnd.google-apps.folder' and trashed=false"
-
-            # Si hay un folder_id configurado, buscar dentro de él
-            if self.folder_id:
-                folder_query += f" and '{self.folder_id}' in parents"
-
-            folder_results = self.service.files().list(
-                q=folder_query,
-                pageSize=1,
-                fields="files(id, name)"
-            ).execute()
-
-            folders = folder_results.get('files', [])
-            if not folders:
-                st.warning(f"⚠️ No se encontró la carpeta '{self.FOLDER_FACTURAS_PDF}'")
-                return []
-
-            facturas_folder_id = folders[0]['id']
-
-            # Buscar PDFs dentro de la carpeta
             invoices_found = []
+            total = len(invoice_numbers)
 
-            for invoice_num in invoice_numbers:
+            # Buscar cada PDF recursivamente en toda la carpeta compartida
+            for idx, invoice_num in enumerate(invoice_numbers, 1):
+                # VERIFICAR SI SE DEBE CANCELAR
+                if st.session_state.get('cancel_pdf_search', False):
+                    if status_text:
+                        status_text.warning(f"⚠️ Búsqueda cancelada. Procesados {idx-1} de {total}")
+                    break
+
+                # Actualizar progreso
+                if progress_bar:
+                    progress_bar.progress(idx / total)
+                if status_text:
+                    status_text.info(f"🔍 Buscando {idx}/{total}: {invoice_num}")
+
                 try:
-                    # Buscar el PDF por nombre
-                    query = f"name contains '{invoice_num}' and mimeType='application/pdf' and trashed=false and '{facturas_folder_id}' in parents"
+                    # Buscar el PDF por nombre en TODA la carpeta compartida (recursivo)
+                    query_parts = [
+                        f"name contains '{invoice_num}'",
+                        "mimeType='application/pdf'",
+                        "trashed=false"
+                    ]
+
+                    query = " and ".join(query_parts)
 
                     results = self.service.files().list(
                         q=query,
-                        pageSize=1,
-                        fields="files(id, name, size, webViewLink)"
+                        pageSize=5,  # Traer hasta 5 resultados por si hay duplicados
+                        fields="files(id, name, size, webViewLink, parents)",
+                        supportsAllDrives=True,
+                        includeItemsFromAllDrives=True
                     ).execute()
 
                     files = results.get('files', [])
 
                     if files:
+                        # Tomar el primer resultado
                         file = files[0]
+
+                        # Si hay múltiples resultados, avisar
+                        if len(files) > 1:
+                            st.info(f"ℹ️ Factura {invoice_num}: Se encontraron {len(files)} archivos, usando el primero")
+
                         invoices_found.append({
                             'numero_factura': invoice_num,
                             'encontrado': True,
                             'id': file['id'],
                             'nombre': file['name'],
                             'tamano': self._format_size(file.get('size', 0)),
-                            'link_ver': file.get('webViewLink', '')
+                            'link_ver': file.get('webViewLink', ''),
+                            'parents': file.get('parents', [])
                         })
                     else:
                         invoices_found.append({
@@ -782,10 +878,14 @@ class DriveManager:
                         'error': str(e)
                     })
 
+            # Limpiar flag de cancelación
+            if 'cancel_pdf_search' in st.session_state:
+                del st.session_state.cancel_pdf_search
+
             return invoices_found
 
         except Exception as e:
-            st.error(f"Error al buscar en carpeta Facturas PDF: {str(e)}")
+            st.error(f"Error al buscar PDFs: {str(e)}")
             return []
 
     def list_master_files(self, folder_id: str = None, limit: int = 10) -> List[Dict]:
@@ -806,7 +906,9 @@ class DriveManager:
                 q=query,
                 pageSize=limit,
                 fields="files(id, name, createdTime, modifiedTime, size, webViewLink)",
-                orderBy="createdTime desc"
+                orderBy="createdTime desc",
+                supportsAllDrives=True,
+                includeItemsFromAllDrives=True
             ).execute()
 
             files = results.get('files', [])

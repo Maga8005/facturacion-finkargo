@@ -211,6 +211,55 @@ button p {
     color: #FFFFFF !important;
 }
 
+/* ========== EXCEPCIÓN: Botón de colapsar sidebar ========== */
+/* Botón limpio con fondo blanco e ícono gris - Con máxima especificidad */
+button[kind="header"],
+button[data-testid="baseButton-header"],
+button[data-testid="collapsedControl"],
+[data-testid="collapsedControl"] button,
+section[data-testid="stSidebar"] + div button,
+.css-18ni7ap,
+.css-vk3wp9 {
+    background: #FFFFFF !important;
+    color: #6B7280 !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 6px !important;
+    padding: 8px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+    transition: all 0.2s ease !important;
+    width: auto !important;
+    min-width: auto !important;
+}
+
+button[kind="header"] *,
+button[data-testid="baseButton-header"] *,
+button[data-testid="collapsedControl"] *,
+[data-testid="collapsedControl"] button *,
+section[data-testid="stSidebar"] + div button *,
+.css-18ni7ap *,
+.css-vk3wp9 * {
+    color: #6B7280 !important;
+}
+
+button[kind="header"]:hover,
+button[data-testid="baseButton-header"]:hover,
+button[data-testid="collapsedControl"]:hover,
+[data-testid="collapsedControl"] button:hover,
+section[data-testid="stSidebar"] + div button:hover {
+    background: #FFFFFF !important;
+    border-color: #D1D5DB !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+    transform: none !important;
+}
+
+button[kind="header"]:hover *,
+button[data-testid="baseButton-header"]:hover *,
+button[data-testid="collapsedControl"]:hover *,
+[data-testid="collapsedControl"] button:hover *,
+section[data-testid="stSidebar"] + div button:hover * {
+    color: #6B7280 !important;
+}
+
 /* Hover state - más específico */
 .stButton > button:hover,
 button[kind="primary"]:hover,
@@ -230,9 +279,29 @@ div[data-testid="stButton"] > button:active {
     transform: translateY(0) !important;
     box-shadow: 0 2px 4px rgba(60, 71, 211, 0.2) !important;
     color: #FFFFFF !important;
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
 }
 
-/* Texto blanco en hover y active - FORZADO CON MÁXIMA ESPECIFICIDAD */
+/* Visited state - después de hacer clic */
+.stButton > button:visited,
+button[kind="primary"]:visited,
+div.stButton > button:visited,
+div[data-testid="stButton"] > button:visited {
+    color: #FFFFFF !important;
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+}
+
+/* Focus state - cuando tiene foco */
+.stButton > button:focus,
+button[kind="primary"]:focus,
+div.stButton > button:focus,
+div[data-testid="stButton"] > button:focus {
+    color: #FFFFFF !important;
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+    outline: none !important;
+}
+
+/* Texto blanco en hover, active, visited y focus - FORZADO CON MÁXIMA ESPECIFICIDAD */
 div[data-testid="stButton"] > button:hover,
 div[data-testid="stButton"] > button:hover *,
 div[data-testid="stButton"] > button:hover > div,
@@ -241,6 +310,10 @@ div[data-testid="stButton"] > button:active,
 div[data-testid="stButton"] > button:active *,
 div[data-testid="stButton"] > button:active > div,
 div[data-testid="stButton"] > button:active > div > p,
+div[data-testid="stButton"] > button:visited,
+div[data-testid="stButton"] > button:visited *,
+div[data-testid="stButton"] > button:focus,
+div[data-testid="stButton"] > button:focus *,
 .stButton > button:hover *,
 .stButton > button:hover,
 .stButton > button:hover p,
@@ -254,7 +327,18 @@ button[kind="primary"]:hover *,
 .stButton > button:active span,
 .stButton > button:active div,
 button[kind="primary"]:active,
-button[kind="primary"]:active * {
+button[kind="primary"]:active *,
+.stButton > button:visited,
+.stButton > button:visited *,
+.stButton > button:visited p,
+.stButton > button:visited span,
+.stButton > button:visited div,
+button[kind="primary"]:visited,
+button[kind="primary"]:visited *,
+.stButton > button:focus,
+.stButton > button:focus *,
+button[kind="primary"]:focus,
+button[kind="primary"]:focus * {
     color: #FFFFFF !important;
 }
 
@@ -266,34 +350,129 @@ button[kind="primary"]:active * {
     box-shadow: none !important;
 }
 
-/* Botón "Browse files" del file uploader */
-.stFileUploader button {
+/* ========== BOTONES DEL SIDEBAR - ESTILO PRIMARY ========== */
+/* Botón de cerrar sesión del sidebar mantiene estilo primary */
+[data-testid="stSidebar"] .stButton > button {
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1.5rem !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 4px rgba(60, 71, 211, 0.2) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: linear-gradient(135deg, #0C147B 0%, #050A53 100%) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(60, 71, 211, 0.4) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button * {
+    color: #FFFFFF !important;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover * {
+    color: #FFFFFF !important;
+}
+
+/* ========== BOTONES SECUNDARIOS (GENERAL) ========== */
+/* Aplica a todos los botones que NO sean primary */
+button[kind="secondary"],
+.stFileUploader button,
+.stButton > button:not([kind="primary"]) {
     background: transparent !important;
     border: 2px solid #3C47D3 !important;
     color: #3C47D3 !important;
     border-radius: 8px !important;
-    padding: 0.5rem 1.5rem !important;
+    padding: 0.75rem 1.5rem !important;
     font-weight: 600 !important;
+    font-size: 15px !important;
     transition: all 0.2s ease !important;
+    box-shadow: none !important;
 }
 
-.stFileUploader button:hover {
+/* Hover en botones secundarios */
+button[kind="secondary"]:hover,
+.stFileUploader button:hover,
+.stButton > button:not([kind="primary"]):hover {
     background: #F5F8FE !important;
     border-color: #0C147B !important;
     color: #0C147B !important;
+    transform: none !important;
+    box-shadow: none !important;
 }
 
-/* Botones del sidebar - estilo secundario */
-[data-testid="stSidebar"] .stButton > button {
-    background: transparent !important;
-    border: 2px solid #3C47D3 !important;
+/* Texto dentro de botones secundarios */
+button[kind="secondary"] *,
+.stFileUploader button *,
+.stButton > button:not([kind="primary"]) * {
     color: #3C47D3 !important;
+    background: transparent !important;
 }
 
-[data-testid="stSidebar"] .stButton > button:hover {
-    background: #F5F8FE !important;
-    border-color: #0C147B !important;
+/* Texto dentro de botones secundarios en hover */
+button[kind="secondary"]:hover *,
+.stFileUploader button:hover *,
+.stButton > button:not([kind="primary"]):hover * {
     color: #0C147B !important;
+}
+
+/* ========== RADIO BUTTONS ========== */
+/* Contenedor de radio buttons */
+div[data-testid="stRadio"] {
+    background: transparent !important;
+}
+
+/* Radio buttons horizontales - estilo de tabs */
+div[data-testid="stRadio"][data-baseweb="radio"] > div {
+    gap: 12px !important;
+    background-color: transparent !important;
+}
+
+/* Cada opción del radio button */
+div[data-testid="stRadio"] label {
+    background: linear-gradient(135deg, #E5E7EB 0%, #D1D5DB 100%) !important;
+    color: #374151 !important;
+    border-radius: 12px !important;
+    padding: 12px 24px !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    transition: all 0.3s ease !important;
+    cursor: pointer !important;
+    border: 2px solid transparent !important;
+    min-width: 180px !important;
+    text-align: center !important;
+}
+
+/* Radio button hover */
+div[data-testid="stRadio"] label:hover {
+    background: linear-gradient(135deg, #D1D5DB 0%, #9CA3AF 100%) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Radio button seleccionado */
+div[data-testid="stRadio"] label:has(input:checked) {
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+    color: #FFFFFF !important;
+    border-color: #3C47D3 !important;
+    box-shadow: 0 4px 16px rgba(60, 71, 211, 0.4) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Texto dentro de radio button seleccionado */
+div[data-testid="stRadio"] label:has(input:checked) span,
+div[data-testid="stRadio"] label:has(input:checked) p,
+div[data-testid="stRadio"] label:has(input:checked) div {
+    color: #FFFFFF !important;
+}
+
+/* Ocultar el círculo de radio nativo */
+div[data-testid="stRadio"] input[type="radio"] {
+    display: none !important;
 }
 
 /* ========== CARDS Y CONTENEDORES ========== */
@@ -538,25 +717,42 @@ button[kind="primary"]:active * {
     z-index: 999 !important;
 }
 
-/* Forzar visibilidad del botón de toggle/colapso de sidebar */
-button[kind="header"] {
-    display: block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
+/* OCULTAR el botón de toggle/colapso de sidebar - sidebar fijo */
+button[kind="header"],
+button[data-testid="baseButton-header"],
+button[data-testid="collapsedControl"],
+[data-testid="collapsedControl"],
+[data-testid="collapsedControl"] button,
+.css-18ni7ap,
+.css-vk3wp9,
+.st-emotion-cache-qmp9ai,
+button.st-emotion-cache-qmp9ai,
+.e6f82ta8 {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
 }
 
 /* Asegurar que el contenedor de sidebar esté visible */
-section[data-testid="stSidebar"] {
+section[data-testid="stSidebar"],
+[data-testid="stSidebar"] {
     display: block !important;
     visibility: visible !important;
 }
 
-/* Botón hamburguesa para expandir/colapsar sidebar */
-[data-testid="collapsedControl"] {
+/* Botón hamburguesa para expandir/colapsar sidebar - con múltiples selectores */
+[data-testid="collapsedControl"],
+button[data-testid="collapsedControl"],
+.stSidebarCollapsedControl,
+section[data-testid="stSidebar"] + div button {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
-    z-index: 1000 !important;
+    z-index: 999999 !important;
+    pointer-events: auto !important;
 }
 
 [data-testid="stSidebar"] h3 {
