@@ -6,6 +6,7 @@ Sistema de login con usuarios y contraseñas locales
 import streamlit as st
 import hashlib
 from typing import Optional, Dict
+from modules.config_helper import get_users
 
 
 class SimpleAuthManager:
@@ -17,12 +18,8 @@ class SimpleAuthManager:
 
     def __init__(self):
         """Inicializa el gestor de autenticación"""
-        try:
-            # Cargar usuarios desde secrets.toml
-            self.users = dict(st.secrets["users"])
-        except KeyError:
-            st.error("❌ Error: No se encontró la configuración de usuarios en secrets.toml")
-            self.users = {}
+        # Cargar usuarios desde variables de entorno o secrets.toml
+        self.users = get_users()
 
     def hash_password(self, password: str) -> str:
         """
