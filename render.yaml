@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: facturacion-finkargo
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: drive_folder_id
+        sync: false
+      - key: SERVICE_ACCOUNT_JSON
+        sync: false
+    healthCheckPath: /_stcore/health
