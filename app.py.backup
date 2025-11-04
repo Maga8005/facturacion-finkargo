@@ -8,10 +8,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 from modules.drive_manager import DriveManager
 from modules.file_processor import FileProcessor
-from modules.simple_auth import SimpleAuthManager
 import tempfile
 import os
-import time
 from io import BytesIO
 
 # Configuración de la página
@@ -44,19 +42,26 @@ def load_css():
                 /* CSS v{timestamp} */
                 {css}
 
-                /* Fix adicional para forzar texto blanco SOLO en botones primary */
-                button[kind="primary"] {{
+                /* Fix adicional para forzar texto blanco en botones */
+                button[kind="primary"],
+                button[data-testid*="baseButton"],
+                .stButton button {{
                     color: white !important;
                 }}
 
-                button[kind="primary"] * {{
+                button[kind="primary"] *,
+                button[data-testid*="baseButton"] *,
+                .stButton button *,
+                [data-testid="stButton"] * {{
                     color: white !important;
                 }}
 
                 /* Ocultar botón de Deploy y otros elementos de Streamlit */
                 #MainMenu {{visibility: hidden;}}
                 footer {{visibility: hidden;}}
+                header {{visibility: hidden;}}
                 .stDeployButton {{display: none;}}
+                button[kind="header"] {{display: none;}}
                 [data-testid="stToolbar"] {{display: none;}}
                 </style>
                 ''', unsafe_allow_html=True)
@@ -70,8 +75,9 @@ def load_css():
 
                     function forceWhiteButtonText() {
                         const doc = parentWindow.document;
-                        // Solo aplicar a botones primary
-                        const buttons = doc.querySelectorAll('button[kind="primary"]');
+                        const buttons = doc.querySelectorAll(
+                            'button[kind="primary"], button[data-testid*="baseButton"], .stButton button, [data-testid="stButton"] button'
+                        );
 
                         buttons.forEach(function(button) {
                             button.style.setProperty('color', 'white', 'important');
@@ -82,71 +88,13 @@ def load_css():
                         });
                     }
 
-                    function forceSidebarOpen() {
-                        const doc = parentWindow.document;
-
-                        // Buscar el sidebar
-                        const sidebar = doc.querySelector('section[data-testid="stSidebar"]');
-
-                        if (sidebar) {
-                            // Forzar que esté visible
-                            sidebar.style.display = 'block';
-                            sidebar.style.visibility = 'visible';
-                            sidebar.style.opacity = '1';
-                            sidebar.setAttribute('aria-expanded', 'true');
-
-                            // Remover clases de colapsado
-                            sidebar.classList.remove('collapsed');
-                        }
-
-                        // OCULTAR COMPLETAMENTE el botón de toggle del sidebar
-                        const toggleButtons = doc.querySelectorAll(
-                            '[data-testid="collapsedControl"], button[data-testid="collapsedControl"], button[kind="header"], button[data-testid="baseButton-header"], .st-emotion-cache-qmp9ai, button.st-emotion-cache-qmp9ai, .e6f82ta8'
-                        );
-
-                        toggleButtons.forEach(function(btn) {
-                            btn.style.display = 'none';
-                            btn.style.visibility = 'hidden';
-                            btn.style.opacity = '0';
-                            btn.style.pointerEvents = 'none';
-                            btn.style.width = '0';
-                            btn.style.height = '0';
-                            btn.remove(); // Eliminar del DOM directamente
-                        });
-
-                        // También buscar por aria-label
-                        const ariaButtons = doc.querySelectorAll('button[aria-label*="sidebar"], button[aria-label*="Sidebar"]');
-                        ariaButtons.forEach(function(btn) {
-                            btn.style.display = 'none';
-                            btn.style.visibility = 'hidden';
-                            btn.remove();
-                        });
-
-                        // Buscar cualquier botón que esté justo antes o después del sidebar
-                        const sidebarButtons = doc.querySelectorAll('section[data-testid="stSidebar"] ~ button, section[data-testid="stSidebar"] + button');
-                        sidebarButtons.forEach(function(btn) {
-                            if (btn.innerText === '' || btn.querySelector('svg')) {
-                                btn.style.display = 'none';
-                                btn.remove();
-                            }
-                        });
-                    }
-
                     // Ejecutar después de cargar
                     setTimeout(forceWhiteButtonText, 500);
                     setTimeout(forceWhiteButtonText, 1000);
                     setTimeout(forceWhiteButtonText, 2000);
 
-                    setTimeout(forceSidebarOpen, 100);
-                    setTimeout(forceSidebarOpen, 500);
-                    setTimeout(forceSidebarOpen, 1000);
-                    setTimeout(forceSidebarOpen, 2000);
-
                     // Observer para cambios en el DOM
-                    const observer = new MutationObserver(function() {
-                        forceWhiteButtonText();
-                        forceSidebarOpen();
-                    });
+                    const observer = new MutationObserver(forceWhiteButtonText);
                     observer.observe(parentWindow.document.body, { childList: true, subtree: true });
                     </script>
                     """,
@@ -162,23 +110,6 @@ def load_css():
 
 # Aplicar estilos
 load_css()
-
-# ==================== SISTEMA DE AUTENTICACIÓN ====================
-
-# Inicializar gestor de autenticación
-if 'auth_manager' not in st.session_state:
-    st.session_state.auth_manager = SimpleAuthManager()
-
-auth_manager = st.session_state.auth_manager
-
-# Verificar autenticación
-if not auth_manager.login():
-    st.stop()  # Detener ejecución si no está autenticado
-
-# Usuario autenticado - Mostrar botón de logout en sidebar
-auth_manager.show_user_info_sidebar()
-
-# ==================== APLICACIÓN PRINCIPAL ====================
 
 # Inicializar session state
 if 'consolidated_data' not in st.session_state:
@@ -199,20 +130,11 @@ if 'master_loaded' not in st.session_state:
     st.session_state.master_loaded = False
 
 # Función helper para Drive Manager
-@st.cache_resource
-def get_drive_manager_cached():
-    """Obtener o crear instancia de DriveManager (con caché)"""
-    try:
-        return DriveManager()
-    except Exception as e:
-        st.error(f"Error al inicializar DriveManager: {str(e)}")
-        return None
-
 def get_drive_manager():
     """Obtener o crear instancia de DriveManager"""
     try:
         if st.session_state.drive_manager is None:
-            st.session_state.drive_manager = get_drive_manager_cached()
+            st.session_state.drive_manager = DriveManager()
         return st.session_state.drive_manager
     except:
         return None
@@ -320,266 +242,59 @@ st.markdown("""
     </div>
 """, unsafe_allow_html=True)
 
-# Sección de Google Drive - Disponible en contenido principal
-drive_manager_main = get_drive_manager()
-drive_connected = drive_manager_main and drive_manager_main.is_authenticated()
-
-st.markdown("""
-    <div style='background: white; border: 2px solid #3C47D3; border-radius: 12px; padding: 20px; margin-bottom: 24px;'>
-        <div style='display: flex; align-items: center; justify-content: space-between; gap: 20px;'>
-            <div style='flex: 1;'>
-                <div style='font-size: 16px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
-                    🔐 Conexión con Google Drive
-                </div>
-                <div style='font-size: 13px; color: #6B7280;'>
-                    Conecta tu cuenta para subir reportes, consultar archivo Master y buscar PDFs de facturas
-                </div>
-            </div>
-        </div>
-    </div>
-""", unsafe_allow_html=True)
-
-# Mostrar estado y proceso de conexión
-if drive_connected:
-    # Usuario conectado
-    col_status, col_button = st.columns([2, 1])
-
-    with col_status:
-        st.markdown("""
-            <div style='background: #D1FAE5; border: 1px solid #10B981; border-radius: 8px; padding: 12px; display: inline-block;'>
-                <span style='color: #065F46; font-weight: 600;'>✅ Conectado a Google Drive</span>
-            </div>
-        """, unsafe_allow_html=True)
-        st.caption("✓ Acceso completo a tu cuenta de Drive")
-
-    with col_button:
-        if st.button("🔓 Desconectar", use_container_width=True, key="btn_disconnect_main"):
-            # Eliminar credenciales
-            if 'google_drive_creds' in st.session_state:
-                del st.session_state.google_drive_creds
-            if 'drive_manager' in st.session_state:
-                del st.session_state.drive_manager
-            if 'oauth_flow' in st.session_state:
-                del st.session_state.oauth_flow
-
-            # Eliminar archivo de token
-            import os
-            if os.path.exists('token.json'):
-                os.remove('token.json')
-
-            st.success("✅ Desconectado correctamente")
-            st.rerun()
-else:
-    # Usuario NO conectado - Mostrar proceso de autenticación
-    st.markdown("""
-        <div style='background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; padding: 12px; margin-bottom: 16px;'>
-            <span style='color: #92400E; font-weight: 600;'>⚠️ No conectado a Google Drive</span>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Verificar credenciales
-    try:
-        client_id = st.secrets.get("client_id", "")
-        client_secret = st.secrets.get("client_secret", "")
-
-        if not client_id or not client_secret:
-            st.error("❌ Faltan credenciales de Google Drive")
-            st.caption("Configura client_id y client_secret en .streamlit/secrets.toml")
-        else:
-            # Proceso de autenticación en 2 pasos
-            st.markdown("#### 📋 Proceso de Autorización")
-
-            with st.expander("📖 ¿Cómo funciona?", expanded=False):
-                st.markdown("""
-                **Pasos para conectar:**
-
-                1. Click en "Generar URL de autorización"
-                2. Se generará una URL especial
-                3. Copia la URL y ábrela en tu navegador
-                4. Inicia sesión con: **maleja8005@gmail.com**
-                5. Acepta los permisos de Google Drive
-                6. Google te mostrará un código
-                7. Copia el código y pégalo en el campo de abajo
-                8. Click en "Conectar"
-                """)
-
-            # PASO 1: Generar URL
-            if 'oauth_flow' not in st.session_state:
-                st.markdown("**📍 Paso 1: Generar URL de autorización**")
-
-                if st.button("🔑 Generar URL de autorización", type="primary", key="btn_gen_url_main"):
-                    try:
-                        from google_auth_oauthlib.flow import InstalledAppFlow
-
-                        # Crear configuración del cliente
-                        client_config = {
-                            "installed": {
-                                "client_id": client_id,
-                                "client_secret": client_secret,
-                                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                                "token_uri": "https://oauth2.googleapis.com/token",
-                                "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-                                "redirect_uris": ["http://localhost", "urn:ietf:wg:oauth:2.0:oob"]
-                            }
-                        }
-
-                        # Crear flujo de OAuth
-                        flow = InstalledAppFlow.from_client_config(
-                            client_config,
-                            scopes=['https://www.googleapis.com/auth/drive']
-                        )
-
-                        # Generar URL de autorización - método manual
-                        flow.redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
-                        auth_url, _ = flow.authorization_url(
-                            access_type='offline',
-                            prompt='consent'
-                        )
-
-                        # Guardar flow en session state
-                        st.session_state.oauth_flow = flow
-                        st.session_state.auth_url = auth_url
-
-                        st.rerun()
-
-                    except Exception as e:
-                        st.error(f"❌ Error al generar URL: {str(e)}")
-
-            # PASO 2: Mostrar URL y pedir código
-            else:
-                st.success("✅ URL de autorización generada")
-
-                st.markdown("**📍 Paso 2: Copia esta URL y ábrela en tu navegador**")
-                auth_url = st.session_state.get('auth_url', '')
-
-                st.code(auth_url, language=None)
-
-                # Botón para abrir en nueva pestaña
-                st.markdown(f"👉 [Abrir URL en nueva pestaña]({auth_url})")
-
-                st.warning("⚠️ Después de autorizar con **maleja8005@gmail.com**, Google te mostrará un código. Cópialo.")
-
-                st.markdown("**📍 Paso 3: Pega el código de autorización**")
-
-                auth_code = st.text_input(
-                    "Código de autorización:",
-                    type="default",
-                    key="auth_code_main",
-                    help="Pega aquí el código que Google te mostró"
-                )
-
-                col1, col2 = st.columns([1, 1])
-
-                with col1:
-                    if st.button("✅ Conectar con este código", type="primary", key="btn_submit_code_main"):
-                        if not auth_code:
-                            st.warning("⚠️ Por favor ingresa el código primero")
-                        else:
-                            try:
-                                with st.spinner("🔐 Conectando con Google Drive..."):
-                                    from googleapiclient.discovery import build
-
-                                    flow = st.session_state.oauth_flow
-
-                                    # Obtener token con el código
-                                    flow.fetch_token(code=auth_code.strip())
-
-                                    creds = flow.credentials
-                                    st.session_state.google_drive_creds = creds
-
-                                    # Construir servicio para verificar
-                                    service = build('drive', 'v3', credentials=creds)
-
-                                    # Guardar en drive_manager
-                                    if drive_manager_main:
-                                        drive_manager_main.creds = creds
-                                        drive_manager_main.service = service
-                                        drive_manager_main._save_credentials_to_file()
-
-                                    # Limpiar flow
-                                    if 'oauth_flow' in st.session_state:
-                                        del st.session_state.oauth_flow
-                                    if 'auth_url' in st.session_state:
-                                        del st.session_state.auth_url
-
-                                    st.success("✅ ¡Conectado exitosamente!")
-                                    st.balloons()
-                                    time.sleep(1)
-                                    st.rerun()
-
-                            except Exception as e:
-                                st.error(f"❌ Error al conectar: {str(e)}")
-
-                                if "invalid_grant" in str(e).lower() or "code" in str(e).lower():
-                                    st.warning("💡 El código puede haber expirado. Genera uno nuevo.")
-                                else:
-                                    st.info("Verifica que el código esté completo y sin espacios extra")
-
-                with col2:
-                    if st.button("🔄 Cancelar y generar nuevo código", key="btn_cancel_auth"):
-                        if 'oauth_flow' in st.session_state:
-                            del st.session_state.oauth_flow
-                        if 'auth_url' in st.session_state:
-                            del st.session_state.auth_url
-                        st.rerun()
-
-    except Exception as e:
-        st.error(f"❌ Error: {str(e)}")
-
-st.markdown("<div style='margin-bottom: 24px;'></div>", unsafe_allow_html=True)
-
 # Sidebar con diseño mejorado
 with st.sidebar:
     st.markdown("### 🔐 Google Drive")
 
-    # Verificar si hay service account configurada
+    # Verificar si hay credenciales configuradas
     try:
-        import os
-        service_account_file = 'config/service_account.json'
+        client_id = st.secrets.get("client_id", "")
+        client_secret = st.secrets.get("client_secret", "")
 
-        if os.path.exists(service_account_file):
-            # Estado: Service Account configurada
+        if client_id and client_secret:
+            # Estado: Credenciales configuradas
             st.markdown("""
                 <div class='status-badge-success' style='width: 100%; text-align: center; margin-bottom: 12px;'>
-                    ✅ Service Account configurada
+                    ✅ Credenciales configuradas
                 </div>
             """, unsafe_allow_html=True)
 
             # Verificar si está autenticado
-            drive_manager_sidebar = get_drive_manager()
-
-            if drive_manager_sidebar and drive_manager_sidebar.is_authenticated():
+            if 'google_drive_creds' in st.session_state:
                 st.markdown("""
                     <div class='status-badge-success' style='width: 100%; text-align: center; margin-bottom: 12px;'>
                         🔗 Conectado a Drive
                     </div>
                 """, unsafe_allow_html=True)
 
-                st.caption("📁 Acceso completo a Google Drive")
-                st.caption("✓ Consultar archivo Master")
-                st.caption("✓ Buscar PDFs")
-                st.caption("✓ Generar reportes")
+                # Botón para desconectar
+                if st.button("🔓 Desconectar", use_container_width=True, key="btn_disconnect"):
+                    # Eliminar credenciales del session state
+                    if 'google_drive_creds' in st.session_state:
+                        del st.session_state.google_drive_creds
+                    if 'drive_manager' in st.session_state:
+                        del st.session_state.drive_manager
+
+                    # Eliminar archivo de token persistente
+                    import os
+                    if os.path.exists('token.json'):
+                        os.remove('token.json')
+
+                    st.rerun()
             else:
                 st.markdown("""
                     <div class='status-badge-warning' style='width: 100%; text-align: center; margin-bottom: 12px;'>
-                        ⚠️ No conectado
+                        ⚠️ No autorizado
                     </div>
                 """, unsafe_allow_html=True)
-
-                st.caption("Drive permite:")
-                st.caption("• Consultar archivo Master")
-                st.caption("• Buscar PDFs de facturas")
-                st.caption("• Generar reportes")
+                st.caption("👉 Ve a 'Reportes desde Master' para conectar")
         else:
-            st.error("❌ Falta archivo de credenciales")
+            st.error("❌ Faltan credenciales")
             with st.expander("📖 ¿Cómo configurar?"):
-                st.markdown("""
-                Coloca el archivo `service_account.json` en:
-                ```
-                config/service_account.json
-                ```
-
-                Este archivo contiene las credenciales de la Service Account de Google Cloud.
+                st.code("""
+# En .streamlit/secrets.toml
+client_id = "tu-client-id"
+client_secret = "tu-client-secret"
                 """)
     except Exception as e:
         st.error("❌ Error en configuración")
@@ -640,7 +355,7 @@ def render_file_upload_section():
                 subtitle="Sistema contable - Facturas",
                 file_key="netsuite",
                 file_types=["xls", "xlsx"],
-                is_optional=True
+                is_optional=False
             )
 
         with col2:
@@ -664,7 +379,7 @@ def render_file_upload_section():
                     subtitle="Sistema de facturación - Facturas emitidas",
                     file_key="facturas",
                     file_types=["xlsx"],
-                    is_optional=True
+                    is_optional=False
                 )
 
             with col4:
@@ -686,15 +401,13 @@ def render_file_upload_section():
             icon="✅"
         )
 
-        # Pareja 1: Facturas
+        # Pareja 1: Facturas (obligatoria)
         pareja_facturas_ok = archivo_netsuite and archivo_facturas
         pareja_facturas_incompleta = (archivo_netsuite and not archivo_facturas) or (not archivo_netsuite and archivo_facturas)
-        pareja_facturas_vacia = not archivo_netsuite and not archivo_facturas
 
-        # Pareja 2: Notas Crédito
-        pareja_nc_ok = archivo_netsuite_nc and archivo_notas
+        # Pareja 2: Notas Crédito (opcional, pero deben ir juntas)
+        pareja_nc_ok = (archivo_netsuite_nc and archivo_notas) or (not archivo_netsuite_nc and not archivo_notas)
         pareja_nc_incompleta = (archivo_netsuite_nc and not archivo_notas) or (not archivo_netsuite_nc and archivo_notas)
-        pareja_nc_vacia = not archivo_netsuite_nc and not archivo_notas
 
         # Usar container para validación compacta
         with st.container():
@@ -711,11 +424,11 @@ def render_file_upload_section():
                     elif archivo_facturas and not archivo_netsuite:
                         st.caption("→ Tienes Noova Facturas pero falta Netsuite Facturas")
                 else:
-                    st.info("ℹ️ **Pareja 1:** Facturas (opcional)")
-                    st.caption("→ Si cargas facturas, debes cargar ambos archivos")
+                    st.warning("⚠️ **Pareja 1:** Facturas (obligatoria)")
+                    st.caption("→ Debes cargar Netsuite Facturas + Noova Facturas")
 
                 # Pareja 2: Notas Crédito
-                if pareja_nc_ok:
+                if archivo_netsuite_nc and archivo_notas:
                     st.success("✅ **Pareja 2:** Notas Crédito Netsuite + Noova")
                 elif pareja_nc_incompleta:
                     st.error("❌ **Pareja 2:** Notas Crédito incompleta")
@@ -730,44 +443,36 @@ def render_file_upload_section():
             with col_btn:
                 st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
 
-                # Listo para procesar si: Al menos una pareja está completa Y ninguna pareja está incompleta
-                al_menos_una_pareja_completa = pareja_facturas_ok or pareja_nc_ok
-                ninguna_pareja_incompleta = not pareja_facturas_incompleta and not pareja_nc_incompleta
-                listo_para_procesar = al_menos_una_pareja_completa and ninguna_pareja_incompleta
+                # Listo para procesar si: Pareja 1 OK y Pareja 2 OK (o vacía)
+                listo_para_procesar = pareja_facturas_ok and pareja_nc_ok
 
                 if st.button(
                     "🚀 Procesar Archivos",
+                    type="primary",
                     use_container_width=True,
                     disabled=not listo_para_procesar,
                     key="btn_procesar_archivos"
                 ):
                     # Validaciones con mensajes claros
-                    if not al_menos_una_pareja_completa:
-                        st.error("❌ **Error: No hay archivos para procesar**")
-                        st.warning("📋 Debes cargar **al menos una pareja completa**:\n- **Opción 1:** Netsuite Facturas + Noova Facturas\n- **Opción 2:** Netsuite NC + Noova NC\n- **Opción 3:** Ambas parejas")
-                    elif pareja_facturas_incompleta:
+                    if not pareja_facturas_ok:
                         st.error("❌ **Error: Pareja de Facturas incompleta**")
-                        st.warning("📋 Si cargas facturas, debes cargar **ambos archivos**:\n- Netsuite Facturas (.xls/.xlsx)\n- Noova Facturas (.xlsx)")
-                    elif pareja_nc_incompleta:
+                        st.warning("📋 Debes cargar **ambos archivos**:\n- Netsuite Facturas (.xls/.xlsx)\n- Noova Facturas (.xlsx)")
+                    elif not pareja_nc_ok:
                         st.error("❌ **Error: Pareja de Notas Crédito incompleta**")
-                        st.warning("📋 Si cargas Notas Crédito, debes cargar **ambos archivos**:\n- Netsuite NC (.xls/.xlsx)\n- Noova NC (.xlsx)")
+                        st.warning("📋 Si cargas Notas Crédito, debes cargar **ambos archivos**:\n- Netsuite NC (.xls/.xlsx)\n- Noova NC (.xlsx)\n\nO **ninguno** de los dos.")
                     else:
                         with st.spinner("⏳ Procesando archivos... Esto puede tomar unos segundos."):
                             try:
                                 # Crear directorio temporal
                                 with tempfile.TemporaryDirectory() as tmpdir:
-                                    # Guardar archivos temporalmente (opcional)
-                                    netsuite_path = None
-                                    if archivo_netsuite:
-                                        netsuite_path = os.path.join(tmpdir, archivo_netsuite.name)
-                                        with open(netsuite_path, 'wb') as f:
-                                            f.write(archivo_netsuite.getbuffer())
+                                    # Guardar archivos temporalmente
+                                    netsuite_path = os.path.join(tmpdir, archivo_netsuite.name)
+                                    with open(netsuite_path, 'wb') as f:
+                                        f.write(archivo_netsuite.getbuffer())
 
-                                    facturas_path = None
-                                    if archivo_facturas:
-                                        facturas_path = os.path.join(tmpdir, archivo_facturas.name)
-                                        with open(facturas_path, 'wb') as f:
-                                            f.write(archivo_facturas.getbuffer())
+                                    facturas_path = os.path.join(tmpdir, archivo_facturas.name)
+                                    with open(facturas_path, 'wb') as f:
+                                        f.write(archivo_facturas.getbuffer())
 
                                     notas_path = None
                                     if archivo_notas:
@@ -775,6 +480,7 @@ def render_file_upload_section():
                                         with open(notas_path, 'wb') as f:
                                             f.write(archivo_notas.getbuffer())
 
+                                    # Guardar Netsuite NC si se cargó
                                     netsuite_nc_path = None
                                     if archivo_netsuite_nc:
                                         netsuite_nc_path = os.path.join(tmpdir, archivo_netsuite_nc.name)
@@ -784,19 +490,12 @@ def render_file_upload_section():
                                     # Inicializar procesador
                                     processor = FileProcessor(
                                         column_mapping_path='config/column_mapping.json',
-                                        classification_rules_path='config/classification_rules.json',
-                                        product_classification_path='config/product_classification.json'
+                                        classification_rules_path='config/classification_rules.json'
                                     )
 
-                                    # Leer archivos Netsuite Facturas (opcional)
-                                    df_netsuite = None
-                                    if netsuite_path:
-                                        df_netsuite = processor.read_netsuite_file(netsuite_path)
-
-                                    # Leer archivos Noova Facturas (opcional)
-                                    df_facturas = None
-                                    if facturas_path:
-                                        df_facturas = processor.read_noova_file(facturas_path, 'facturas')
+                                    # Leer archivos
+                                    df_netsuite = processor.read_netsuite_file(netsuite_path)
+                                    df_facturas = processor.read_noova_file(facturas_path, 'facturas')
 
                                     # Leer Noova Notas Crédito (opcional)
                                     df_notas = None
@@ -808,7 +507,7 @@ def render_file_upload_section():
                                     if netsuite_nc_path:
                                         df_netsuite_nc = processor.read_netsuite_nc_file(netsuite_nc_path)
 
-                                    # Consolidar (incluye los 4 archivos)
+                                    # Consolidar
                                     df_consolidated = processor.consolidate_data(
                                         df_netsuite,
                                         df_facturas,
@@ -858,127 +557,492 @@ def render_file_upload_section():
                                 with col3:
                                     st.metric("Sin Clasificar", stats.get('sin_clasificar', 0))
 
+                                st.info("👉 Ve al Dashboard para ver análisis detallado o a 'Generar Reporte' para descargar los datos")
+
                             except Exception as e:
                                 st.error(f"❌ Error al procesar archivos: {str(e)}")
                                 with st.expander("Ver detalles del error"):
                                     st.exception(e)
 
-    st.markdown("<div style='margin-top: 3rem;'></div>", unsafe_allow_html=True)
-
-    # ==================== GENERAR REPORTE ====================
-    # Header mejorado
-    st.markdown("""
-        <div style='margin-bottom: 2rem;'>
-            <h2 style='font-size: 24px; font-weight: 600; color: #0C147B; margin-bottom: 0.5rem;'>
-                📋 Generación de Reportes
-            </h2>
-            <p style='font-size: 14px; color: #6B7280;'>
-                Genera y descarga reportes consolidados o personalizados
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-
-    if not st.session_state.processed:
+    # ==================== TAB 3: GENERAR REPORTE ====================
+    with tab3:
+        # Header mejorado
         st.markdown("""
-            <div class='info-banner'>
-                <div style='font-size: 16px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
-                    ℹ️ No hay datos procesados
-                </div>
-                <div style='font-size: 14px; color: #6B7280;'>
-                    Ve a la pestaña "Carga de Archivos" y procesa los archivos primero para generar reportes
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
-    else:
-        datos_por_hoja = st.session_state.datos_por_hoja
-
-        # REPORTE DE FACTURACIÓN AUTOMATIZADO - DISEÑO MEJORADO
-        st.markdown("""
-            <div class='card-info' style='padding: 24px; margin-bottom: 24px;'>
-                <h3 style='font-size: 20px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
-                    📁 Reporte de Facturación Automatizado
-                </h3>
-                <p style='font-size: 14px; color: #6B7280; margin-bottom: 0;'>
-                    Genera archivo Excel completo con todas las facturas en 2 hojas (Costos Fijos y Mandato)
+            <div style='margin-bottom: 2rem;'>
+                <h2 style='font-size: 24px; font-weight: 600; color: #0C147B; margin-bottom: 0.5rem;'>
+                    📋 Generación de Reportes
+                </h2>
+                <p style='font-size: 14px; color: #6B7280;'>
+                    Genera y descarga reportes consolidados o personalizados
                 </p>
             </div>
         """, unsafe_allow_html=True)
 
-        # Generar archivo Excel
-        timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
-        file_name = f"Reporte_Facturacion_Automatizado_{timestamp}.xlsx"
-
-        buffer_maestro = BytesIO()
-        with pd.ExcelWriter(buffer_maestro, engine='openpyxl') as writer:
-            for hoja_nombre, hoja_df in datos_por_hoja.items():
-                # Excel tiene límite de 31 caracteres para nombres de hoja
-                sheet_name = hoja_nombre[:31] if len(hoja_nombre) > 31 else hoja_nombre
-                hoja_df.to_excel(writer, sheet_name=sheet_name, index=False)
-
-        file_bytes = buffer_maestro.getvalue()
-
-        # Botón de descarga
-        st.markdown("""
-            <div style='background: #F9FAFB; border: 1px solid #D1D5DB; border-radius: 8px; padding: 16px; margin-bottom: 12px;'>
-                <div style='font-size: 16px; font-weight: 600; color: #0C147B; margin-bottom: 4px;'>
-                    💾 Descargar Reporte
+        if not st.session_state.processed:
+            st.markdown("""
+                <div class='info-banner'>
+                    <div style='font-size: 16px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
+                        ℹ️ No hay datos procesados
+                    </div>
+                    <div style='font-size: 14px; color: #6B7280;'>
+                        Ve a la pestaña "Carga de Archivos" y procesa los archivos primero para generar reportes
+                    </div>
                 </div>
-                <div style='font-size: 13px; color: #6B7280;'>
-                    Descarga el archivo Excel a tu computadora
+            """, unsafe_allow_html=True)
+        else:
+            datos_por_hoja = st.session_state.datos_por_hoja
+
+            # ARCHIVO MAESTRO COMPLETO - DISEÑO MEJORADO
+            st.markdown("""
+                <div class='card-info' style='padding: 24px; margin-bottom: 24px;'>
+                    <h3 style='font-size: 20px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
+                        📁 Archivo Maestro de Facturación
+                    </h3>
+                    <p style='font-size: 14px; color: #6B7280; margin-bottom: 0;'>
+                        Genera archivo Excel completo con todas las facturas en 2 hojas (Costos Fijos y Mandato)
+                    </p>
                 </div>
-            </div>
-        """, unsafe_allow_html=True)
+            """, unsafe_allow_html=True)
 
-        st.download_button(
-            label="💾 Descargar Reporte",
-            data=file_bytes,
-            file_name=file_name,
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            use_container_width=True,
-            key="btn_descargar_local_master"
-        )
+            # Generar archivo Excel
+            timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
+            file_name = f"Maestro_Facturacion_{timestamp}.xlsx"
 
-        # VISTA PREVIA DEL REPORTE
-        st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
-        st.markdown("""
-            <div class='card-info' style='padding: 24px; margin-top: 32px; margin-bottom: 24px;'>
-                <h3 style='font-size: 20px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
-                    👀 Vista Previa del Reporte Generado
-                </h3>
-                <p style='font-size: 14px; color: #6B7280; margin-bottom: 0;'>
-                    Revisa las primeras filas del reporte antes de descargarlo
-                </p>
-            </div>
-        """, unsafe_allow_html=True)
+            buffer_maestro = BytesIO()
+            with pd.ExcelWriter(buffer_maestro, engine='openpyxl') as writer:
+                for hoja_nombre, hoja_df in datos_por_hoja.items():
+                    # Excel tiene límite de 31 caracteres para nombres de hoja
+                    sheet_name = hoja_nombre[:31] if len(hoja_nombre) > 31 else hoja_nombre
+                    hoja_df.to_excel(writer, sheet_name=sheet_name, index=False)
 
-        # Mostrar vista previa de cada hoja
-        for nombre_hoja, df_hoja in datos_por_hoja.items():
-            with st.expander(f"📋 {nombre_hoja} ({len(df_hoja):,} registros)", expanded=False):
-                st.dataframe(df_hoja.head(20), use_container_width=True)
-                st.caption(f"Mostrando las primeras 20 filas de {len(df_hoja):,} registros totales")
+            file_bytes = buffer_maestro.getvalue()
 
-st.markdown("<div style='margin-top: 4rem;'></div>", unsafe_allow_html=True)
+            # Botones de acción con diseño mejorado
+            col_btn1, col_btn2 = st.columns(2)
 
-# ==================== SELECTOR DE SECCIÓN (Mantiene estado después de rerun) ====================
-# Selector visual con radio buttons (Streamlit guarda automáticamente el estado con el key)
-opciones = ["📁 Generar Reportes", "📊 Reportes desde Master"]
-seleccion = st.radio(
-    "Selecciona una opción:",
-    options=opciones,
-    index=0,  # Por defecto: Generar Reportes
-    horizontal=True,
-    key="seccion_activa",
-    label_visibility="collapsed"
-)
+            with col_btn1:
+                st.markdown("""
+                    <div style='background: #F5F8FE; border: 1px solid #77A1E2; border-radius: 8px; padding: 16px; margin-bottom: 12px;'>
+                        <div style='font-size: 16px; font-weight: 600; color: #0C147B; margin-bottom: 4px;'>
+                            ☁️ Generar y Subir a Drive
+                        </div>
+                        <div style='font-size: 13px; color: #6B7280;'>
+                            Sube automáticamente a Google Drive (recomendado)
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
 
-st.markdown("<div style='margin-bottom: 2rem;'></div>", unsafe_allow_html=True)
+                if st.button("☁️ Generar y Subir a Google Drive", type="primary", use_container_width=True, key="btn_generar_subir_master"):
+                    drive_manager = get_drive_manager()
 
-# ==================== SECCIÓN 1: GENERAR REPORTES ====================
-if seleccion == "📁 Generar Reportes":
-    render_file_upload_section()
+                    if drive_manager and drive_manager.is_authenticated():
+                        with st.spinner("📤 Subiendo archivos a Google Drive..."):
+                            # Crear/obtener carpeta "Reportes Facturación" dentro de finkargo
+                            folder_id = drive_manager.create_folder_if_not_exists(drive_manager.FOLDER_REPORTES)
 
-# ==================== SECCIÓN 2: REPORTES DESDE MASTER ====================
-elif seleccion == "📊 Reportes desde Master":
+                            if folder_id:
+                                # Subir archivo Excel a la carpeta "Reportes Facturación"
+                                result = drive_manager.upload_file(file_bytes, file_name, folder_id)
+
+                                if result:
+                                    st.success(f"✅ ¡Archivo Excel subido exitosamente a 'finkargo/{drive_manager.FOLDER_REPORTES}'!")
+
+                                    # Guardar snapshot de datos procesados para poder cargarlos después
+                                    with st.spinner("💾 Guardando snapshot de datos procesados..."):
+                                        data_result = drive_manager.save_processed_data(
+                                            consolidated_data=st.session_state.consolidated_data,
+                                            datos_por_hoja=datos_por_hoja,
+                                            stats=st.session_state.stats,
+                                            metadata=st.session_state.metadata if st.session_state.metadata else {},
+                                            folder_id=folder_id
+                                        )
+
+                                        if data_result:
+                                            st.success("✅ ¡Snapshot de datos guardado! Podrás cargar este reporte más tarde.")
+                                        else:
+                                            st.warning("⚠️ No se pudo guardar el snapshot de datos (no afecta el Excel)")
+
+                                    st.markdown("---")
+
+                                    st.markdown(f"**📄 Archivo:** {result['nombre']}")
+                                    st.markdown(f"**📦 Tamaño:** {result['tamano']}")
+                                    st.markdown(f"**📅 Fecha:** {timestamp}")
+                                    st.markdown(f"**📂 Ubicación:** finkargo/{drive_manager.FOLDER_REPORTES}")
+
+                                    st.link_button(
+                                        "🔗 Abrir en Google Drive",
+                                        result['link'],
+                                        use_container_width=True
+                                    )
+
+                                    st.info("💡 El archivo está en modo SOLO LECTURA. Para trabajar, descarga una copia o duplícalo en Drive.")
+                                else:
+                                    st.error("❌ Error al subir el archivo")
+                            else:
+                                st.error(f"❌ Error al crear/obtener carpeta '{drive_manager.FOLDER_REPORTES}' en Drive")
+                    else:
+                        st.warning("⚠️ Conecta con Google Drive primero")
+                        st.caption("Ve a la pestaña 'Buscar en Drive' para autenticarte")
+
+            with col_btn2:
+                st.markdown("""
+                    <div style='background: #F9FAFB; border: 1px solid #D1D5DB; border-radius: 8px; padding: 16px; margin-bottom: 12px;'>
+                        <div style='font-size: 16px; font-weight: 600; color: #0C147B; margin-bottom: 4px;'>
+                            💾 Descargar Copia Local
+                        </div>
+                        <div style='font-size: 13px; color: #6B7280;'>
+                            Descarga el archivo a tu computadora
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                st.download_button(
+                    label="💾 Descargar Copia Local",
+                    data=file_bytes,
+                    file_name=file_name,
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True,
+                    key="btn_descargar_local_master"
+                )
+
+            # Nota informativa
+            st.markdown("""
+                <div style='background: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 6px; padding: 12px; margin-top: 16px;'>
+                    <div style='display: flex; align-items: center; gap: 8px;'>
+                        <div style='font-size: 20px;'>💡</div>
+                        <div style='font-size: 13px; color: #92400E;'>
+                            Al descargar creas una copia local que puede quedar desactualizada. Se recomienda usar Google Drive como fuente única de verdad.
+                        </div>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+
+            # REPORTES PERSONALIZADOS - DISEÑO MEJORADO
+            st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
+            st.markdown("""
+                <div class='card-info' style='padding: 24px; margin-top: 32px; margin-bottom: 24px;'>
+                    <h3 style='font-size: 20px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
+                        🔍 Generar Reportes Personalizados
+                    </h3>
+                    <p style='font-size: 14px; color: #6B7280; margin-bottom: 0;'>
+                        Filtra y descarga reportes específicos por código de desembolso, moneda o tipo de factura
+                    </p>
+                </div>
+            """, unsafe_allow_html=True)
+
+            # Agregar opción "Todas las Facturas"
+            opciones_hojas = ["📊 Todas las Facturas (Consolidado)"] + list(datos_por_hoja.keys())
+
+            hoja_seleccionada = st.selectbox(
+                "Seleccionar búsqueda:",
+                opciones_hojas,
+                help="Selecciona qué facturas quieres consultar"
+            )
+
+            # Determinar qué DataFrame mostrar
+            if hoja_seleccionada == "📊 Todas las Facturas (Consolidado)":
+                # Combinar todas las hojas
+                dfs_a_combinar = []
+                for nombre_hoja, df_hoja_temp in datos_por_hoja.items():
+                    df_temp = df_hoja_temp.copy()
+                    df_temp['Hoja Origen'] = nombre_hoja  # Agregar columna de origen
+                    dfs_a_combinar.append(df_temp)
+
+                df_hoja = pd.concat(dfs_a_combinar, ignore_index=True)
+
+            elif hoja_seleccionada in datos_por_hoja:
+                df_hoja = datos_por_hoja[hoja_seleccionada]
+
+            else:
+                df_hoja = None
+
+            if df_hoja is not None and not df_hoja.empty:
+                # Filtros con diseño mejorado
+                st.markdown("""
+                    <div style='background: #F5F8FE; border: 1px solid #77A1E2; border-radius: 12px; padding: 20px; margin-bottom: 24px;'>
+                        <h3 style='font-size: 18px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
+                            🎯 Filtros
+                        </h3>
+                        <p style='font-size: 13px; color: #6B7280; margin-bottom: 0;'>
+                            Filtra por tipo de factura, desembolso o moneda
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                # Si es vista consolidada, agregar filtro por hoja origen
+                if hoja_seleccionada == "📊 Todas las Facturas (Consolidado)":
+                    col_hoja_filtro = st.columns(1)[0]
+                    with col_hoja_filtro:
+                        hojas_origen = ['Todas'] + sorted(df_hoja['Hoja Origen'].unique().tolist())
+                        hoja_origen_filtro = st.selectbox(
+                            "🗂️ Filtrar por tipo de factura:",
+                            hojas_origen,
+                            help="Filtra por hoja de origen (Costos Fijos o Mandato)"
+                        )
+                else:
+                    hoja_origen_filtro = None
+
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    # Filtro por código de desembolso
+                    if 'Codigo del desembolso' in df_hoja.columns:
+                        # Limpiar y normalizar códigos
+                        codigos_disponibles = [str(c).strip() for c in df_hoja['Codigo del desembolso'].unique() if pd.notna(c) and str(c).strip()]
+                        codigos_disponibles = sorted(codigos_disponibles)
+
+                        # Debug: mostrar total de códigos únicos
+                        st.caption(f"💡 {len(codigos_disponibles)} códigos únicos disponibles")
+                    else:
+                        codigos_disponibles = []
+
+                    codigo_filtro = st.multiselect(
+                        "Códigos de Desembolso",
+                        options=codigos_disponibles,
+                        default=[],
+                        help="Deja vacío para incluir todos"
+                    )
+
+                with col2:
+                    # Filtro por moneda
+                    if 'Moneda' in df_hoja.columns:
+                        monedas = [str(m) for m in df_hoja['Moneda'].unique() if pd.notna(m)]
+                        monedas = sorted(monedas)
+                    else:
+                        monedas = []
+
+                    moneda_filtro = st.multiselect(
+                        "Moneda",
+                        options=monedas,
+                        default=[],
+                        help="Deja vacío para incluir todas"
+                    )
+            
+                # Aplicar filtros
+                df_filtrado = df_hoja.copy()
+
+                # Filtro por hoja origen (solo en vista consolidada)
+                if hoja_origen_filtro and hoja_origen_filtro != 'Todas' and 'Hoja Origen' in df_filtrado.columns:
+                    df_filtrado = df_filtrado[df_filtrado['Hoja Origen'] == hoja_origen_filtro]
+
+                if codigo_filtro:
+                    # Normalizar la columna y el filtro (trim espacios)
+                    df_filtrado['_codigo_normalizado'] = df_filtrado['Codigo del desembolso'].astype(str).str.strip()
+                    codigo_filtro_normalizado = [str(c).strip() for c in codigo_filtro]
+
+                    df_filtrado = df_filtrado[df_filtrado['_codigo_normalizado'].isin(codigo_filtro_normalizado)]
+                    df_filtrado = df_filtrado.drop(columns=['_codigo_normalizado'])
+
+                    # Debug: mostrar resultados
+                    st.info(f"🔍 Filtrando por {len(codigo_filtro)} código(s): {', '.join(codigo_filtro[:3])}{'...' if len(codigo_filtro) > 3 else ''}")
+
+                if moneda_filtro and 'Moneda' in df_filtrado.columns:
+                    # Convertir a string para comparación
+                    df_filtrado = df_filtrado[df_filtrado['Moneda'].astype(str).str.strip().isin(moneda_filtro)]
+
+                if len(df_filtrado) < len(df_hoja):
+                    st.success(f"✅ Filtros aplicados: {len(df_filtrado)} de {len(df_hoja)} registros")
+                elif codigo_filtro or moneda_filtro or (hoja_origen_filtro and hoja_origen_filtro != 'Todas'):
+                    st.warning(f"⚠️ No se encontraron resultados con los filtros seleccionados")
+
+                # Contador de facturas seleccionadas con diseño mejorado
+                st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
+                st.markdown(f"""
+                    <div style='background: white; border: 2px solid #3C47D3; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;'>
+                        <div style='font-size: 48px; font-weight: 700; color: #3C47D3; margin-bottom: 8px;'>
+                            {len(df_filtrado):,}
+                        </div>
+                        <div style='font-size: 16px; color: #6B7280; font-weight: 600;'>
+                            Facturas seleccionadas
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                # Opciones de exportación
+                st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
+                st.markdown("""
+                    <div style='margin-bottom: 16px;'>
+                        <h3 style='font-size: 18px; font-weight: 600; color: #0C147B;'>
+                            💾 Descargar
+                        </h3>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                # Nombre de archivo según vista y filtros aplicados
+                if codigo_filtro:
+                    # Si hay filtro de código, usar el código en el nombre del archivo
+                    if len(codigo_filtro) == 1:
+                        # Un solo código: usar el código directamente
+                        codigo_limpio = str(codigo_filtro[0]).replace(":", "_").replace("/", "_")
+                        nombre_archivo = f"Factura_{codigo_limpio}"
+                        nombre_hoja_excel = codigo_limpio[:31]
+                    else:
+                        # Múltiples códigos: usar "Multiples_codigos" + cantidad
+                        nombre_archivo = f"Facturas_Multiples_{len(codigo_filtro)}_codigos"
+                        nombre_hoja_excel = "Multiples_Codigos"
+                elif hoja_seleccionada == "📊 Todas las Facturas (Consolidado)":
+                    nombre_archivo = "Consolidado_Todas_Facturas"
+                    nombre_hoja_excel = "Consolidado"
+                else:
+                    nombre_archivo = hoja_seleccionada.replace(" ", "_")
+                    nombre_hoja_excel = hoja_seleccionada[:31]  # Excel limita a 31 caracteres
+
+                col1, col2, col3 = st.columns(3)
+
+                with col1:
+                    # Descargar Excel
+                    buffer = BytesIO()
+                    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                        df_filtrado.to_excel(writer, sheet_name=nombre_hoja_excel, index=False)
+
+                    st.download_button(
+                        label="📥 Descargar Excel",
+                        data=buffer.getvalue(),
+                        file_name=f"{nombre_archivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        use_container_width=True
+                    )
+
+                with col2:
+                    # Descargar CSV
+                    csv = df_filtrado.to_csv(index=False)
+                    st.download_button(
+                        label="📥 Descargar CSV",
+                        data=csv,
+                        file_name=f"{nombre_archivo}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+            
+                with col3:
+                    # Placeholder para Google Sheets
+                    if st.button("📤 Subir a Google Sheets", use_container_width=True):
+                        st.info("🚧 Funcionalidad en desarrollo (Fase 2)")
+            
+                # Búsqueda de PDFs en Drive
+                st.markdown("<div style='margin-top: 2rem;'></div>", unsafe_allow_html=True)
+
+                st.markdown("""
+                    <div style='background: #F5F8FE; border: 1px solid #77A1E2; border-radius: 12px; padding: 20px; margin-bottom: 16px;'>
+                        <h3 style='font-size: 18px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
+                            📎 PDFs Asociados
+                        </h3>
+                        <p style='font-size: 13px; color: #6B7280; margin-bottom: 0;'>
+                            Busca automáticamente los PDFs de las facturas del reporte
+                        </p>
+                    </div>
+                """, unsafe_allow_html=True)
+
+                if st.button("🔍 Buscar PDFs de este reporte", type="primary", use_container_width=True, key="btn_buscar_pdfs_reporte"):
+                    drive_manager = get_drive_manager()
+
+                    if drive_manager and drive_manager.is_authenticated():
+                        # Extraer números de factura del reporte filtrado
+                        if '# Factura' in df_filtrado.columns:
+                            numeros_factura = df_filtrado['# Factura'].dropna().unique().tolist()
+
+                            st.info(f"🔍 Buscando {len(numeros_factura)} PDFs en carpeta '{drive_manager.FOLDER_FACTURAS_PDF}'...")
+
+                            with st.spinner("Buscando..."):
+                                # Usar el nuevo método que busca específicamente en "Facturas PDF"
+                                invoices_found = drive_manager.search_pdfs_in_facturas_folder(numeros_factura)
+
+                                found = [inv for inv in invoices_found if inv.get('encontrado')]
+                                not_found = [inv for inv in invoices_found if not inv.get('encontrado')]
+
+                                if found:
+                                    st.success(f"✅ {len(found)} PDFs encontrados")
+
+                                    # Botón descarga masiva
+                                    if st.button(f"⬇️ Descargar todos ({len(found)}) en ZIP", key="zip_reportes"):
+                                        with st.spinner("Preparando descarga..."):
+                                            zip_content = drive_manager.download_multiple_files(found)
+                                            if zip_content:
+                                                st.download_button(
+                                                    label=f"📥 Descargar ZIP",
+                                                    data=zip_content,
+                                                    file_name=f"Facturas_Reporte_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                                                    mime="application/zip",
+                                                    use_container_width=True
+                                                )
+
+                                if not_found:
+                                    st.warning(f"⚠️ {len(not_found)} facturas no encontradas en carpeta '{drive_manager.FOLDER_FACTURAS_PDF}'")
+                        else:
+                            st.error("❌ La columna '# Factura' no existe en los datos")
+                    else:
+                        st.warning("⚠️ Conecta con Google Drive en la pestaña 'Buscar en Drive' primero")
+
+                st.markdown("---")
+
+                # Vista previa - Colapsada por defecto
+                st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
+                with st.expander("👀 Vista Previa (click para expandir)", expanded=False):
+                    st.dataframe(df_hoja.head(10), use_container_width=True)
+                    st.caption(f"Mostrando las primeras 10 filas de {len(df_hoja):,} total")
+
+                # Herramientas Debug - Colapsadas por defecto
+                with st.expander("🔧 Herramientas Debug (click para expandir)", expanded=False):
+                    if 'Codigo del desembolso' in df_hoja.columns:
+                        st.markdown("### 🔍 Códigos de Desembolso Disponibles")
+                        codigos_unicos = df_hoja['Codigo del desembolso'].unique()
+                        st.write(f"Total: {len(codigos_unicos)} códigos únicos")
+                        st.dataframe(pd.DataFrame({
+                            'Código': [str(c) for c in codigos_unicos if pd.notna(c)]
+                        }), use_container_width=True)
+
+            # Historial de archivos maestros - Al final
+            drive_manager = get_drive_manager()
+            if drive_manager and drive_manager.is_authenticated():
+                with st.expander("📚 Historial de Archivos Generados (click para expandir)", expanded=False):
+                    with st.spinner("Cargando historial..."):
+                        # Obtener/crear carpeta "Reportes Facturación"
+                        folder_id = drive_manager.create_folder_if_not_exists(drive_manager.FOLDER_REPORTES)
+                        archivos_anteriores = drive_manager.list_master_files(folder_id, limit=10)
+
+                        if archivos_anteriores:
+                            st.info(f"📊 Se encontraron {len(archivos_anteriores)} archivos anteriores")
+
+                            for archivo in archivos_anteriores:
+                                col_a, col_b, col_c = st.columns([3, 1, 1])
+
+                                with col_a:
+                                    st.markdown(f"📄 **{archivo['nombre']}**")
+                                    st.caption(f"Creado: {archivo['fecha_creacion'][:10]} | Tamaño: {archivo['tamano']}")
+
+                                with col_b:
+                                    # Solo mostrar botón si hay link válido
+                                    link = archivo.get('link', '').strip()
+                                    if link and link.startswith('http') and len(link) > 10:
+                                        try:
+                                            st.link_button(
+                                                "👁️ Ver",
+                                                link
+                                            )
+                                        except:
+                                            st.caption("-")
+                                    else:
+                                        st.caption("-")
+
+                                with col_c:
+                                    file_content = drive_manager.download_file(archivo['id'], archivo['nombre'])
+                                    if file_content:
+                                        st.download_button(
+                                            "⬇️",
+                                            file_content,
+                                            archivo['nombre'],
+                                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                                            key=f"dl_{archivo['id']}"
+                                        )
+
+                                st.markdown("---")
+                        else:
+                            st.info("No hay archivos anteriores")
+            else:
+                st.info("💡 Conecta con Google Drive para ver el historial de archivos")
+
+# ==================== MAIN TAB 2: REPORTES DESDE MASTER ====================
+with main_tab2:
     # Header mejorado
     st.markdown("""
         <div style='margin-bottom: 2rem;'>
@@ -991,23 +1055,28 @@ elif seleccion == "📊 Reportes desde Master":
         </div>
     """, unsafe_allow_html=True)
 
+    # Banner informativo mejorado
+    st.markdown("""
+        <div class='info-banner'>
+            <div style='display: flex; align-items: center; gap: 12px;'>
+                <div style='font-size: 24px;'>💡</div>
+                <div>
+                    <div style='font-size: 15px; font-weight: 600; color: #0C147B; margin-bottom: 4px;'>
+                        Consulta el archivo Master histórico (2021-presente)
+                    </div>
+                    <div style='font-size: 13px; color: #6B7280;'>
+                        Filtra por NIT y código de desembolso para generar reportes específicos
+                    </div>
+                </div>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
     drive_manager = get_drive_manager()
 
     if not drive_manager or not drive_manager.is_authenticated():
-        # Banner de autenticación requerida (sin botón)
-        st.markdown("""
-            <div style='background: #FEF3C7; border-left: 4px solid #F59E0B; border-radius: 8px; padding: 20px; margin-bottom: 24px;'>
-                <div style='font-size: 18px; font-weight: 600; color: #92400E; margin-bottom: 8px;'>
-                    🔐 Conexión con Google Drive Requerida
-                </div>
-                <div style='font-size: 14px; color: #92400E; margin-bottom: 12px;'>
-                    Para acceder al archivo Master histórico, necesitas conectarte con tu cuenta de Google Drive.
-                </div>
-                <div style='font-size: 13px; color: #92400E;'>
-                    👈 Usa el botón <strong>"🔑 Conectar con Google Drive"</strong> en la barra lateral izquierda
-                </div>
-            </div>
-        """, unsafe_allow_html=True)
+        st.warning("⚠️ Conecta con Google Drive primero")
+        st.caption("Ve a la pestaña 'Generar Reporte' > 'Buscar en Drive' para autenticarte")
     else:
         # Conectar y cargar archivo Master
         st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
@@ -1019,32 +1088,14 @@ elif seleccion == "📊 Reportes desde Master":
             </div>
         """, unsafe_allow_html=True)
 
-        # Usar caché para evitar búsquedas repetidas del Master
-        if 'master_metadata' not in st.session_state:
-            with st.spinner("🔍 Buscando archivo Master en Drive..."):
-                try:
-                    st.session_state.master_metadata = drive_manager.get_master_file_metadata()
-                except Exception as e:
-                    st.error(f"❌ Error al buscar archivo Master: {str(e)}")
-                    st.session_state.master_metadata = None
-
-        master_metadata = st.session_state.get('master_metadata')
+        with st.spinner("🔍 Buscando archivo Master en Drive..."):
+            master_metadata = drive_manager.get_master_file_metadata()
 
         if not master_metadata:
             st.error("❌ No se encontró el archivo Master en la carpeta 'Facturación'")
             st.info(f"📂 Archivo esperado: **{drive_manager.MASTER_FILE_NAME}**")
             st.caption(f"Ubicación: finkargo/{drive_manager.FOLDER_FACTURACION}")
-
-            if st.button("🔄 Reintentar buscar Master", key="retry_master"):
-                if 'master_metadata' in st.session_state:
-                    del st.session_state.master_metadata
-                st.rerun()
         else:
-            # Botón para refrescar Master
-            if st.button("🔄 Refrescar archivo Master", key="refresh_master"):
-                if 'master_metadata' in st.session_state:
-                    del st.session_state.master_metadata
-                st.rerun()
             # Mostrar información del archivo Master con diseño mejorado
             st.markdown(f"""
                 <div style='background: white; border: 1px solid #D1D5DB; border-radius: 12px; padding: 20px; margin-bottom: 16px;'>
@@ -1072,33 +1123,19 @@ elif seleccion == "📊 Reportes desde Master":
 
             # Botón para cargar datos
             st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+            if st.button("📥 Cargar Datos del Master", type="primary", use_container_width=True, key="btn_cargar_master"):
+                with st.spinner("⏳ Descargando y procesando archivo Master... Esto puede tomar unos segundos."):
+                    dataframes_master = drive_manager.read_master_file()
 
-            # Verificar si ya hay datos cargados
-            if st.session_state.get('master_loaded') and st.session_state.get('master_data'):
-                st.success("✅ Datos del Master ya cargados en memoria")
-                col1, col2 = st.columns(2)
-                with col1:
-                    total_registros = sum(len(df) for df in st.session_state.master_data.values())
-                    st.metric("Registros en memoria", f"{total_registros:,}")
-                with col2:
-                    if st.button("🔄 Recargar Datos", use_container_width=True, key="btn_recargar_master"):
-                        st.session_state.master_loaded = False
-                        st.session_state.master_data = None
-                        st.rerun()
-            else:
-                if st.button("📥 Cargar Datos del Master", use_container_width=True, key="btn_cargar_master"):
-                    with st.spinner("⏳ Descargando y procesando archivo Master... Esto puede tomar unos segundos."):
-                        dataframes_master = drive_manager.read_master_file()
+                    if dataframes_master:
+                        # Guardar en session_state
+                        st.session_state.master_data = dataframes_master
+                        st.session_state.master_loaded = True
 
-                        if dataframes_master:
-                            # Guardar en session_state
-                            st.session_state.master_data = dataframes_master
-                            st.session_state.master_loaded = True
-
-                            st.balloons()
-                            st.success("✅ ¡Archivo Master cargado exitosamente!")
-                        else:
-                            st.error("❌ Error al cargar el archivo Master")
+                        st.balloons()
+                        st.success("✅ ¡Archivo Master cargado exitosamente!")
+                    else:
+                        st.error("❌ Error al cargar el archivo Master")
 
             # Filtros y generación de reportes (solo si hay datos cargados)
             st.markdown("<div style='margin-top: 1.5rem;'></div>", unsafe_allow_html=True)
@@ -1164,24 +1201,8 @@ elif seleccion == "📊 Reportes desde Master":
 
                 st.markdown("---")
 
-                # Filtros: NIT, Código y Fecha
-                col_filtro1, col_filtro2, col_filtro3 = st.columns(3)
-
-                # Función helper para normalizar strings (quitar tildes y convertir a minúsculas)
-                def normalizar_texto(texto):
-                    """Normaliza texto eliminando tildes y convirtiendo a minúsculas"""
-                    if texto is None:
-                        return ""
-                    texto = str(texto)
-                    # Reemplazar tildes
-                    reemplazos = {
-                        'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
-                        'Á': 'a', 'É': 'e', 'Í': 'i', 'Ó': 'o', 'Ú': 'u',
-                        'ñ': 'n', 'Ñ': 'n'
-                    }
-                    for acento, sin_acento in reemplazos.items():
-                        texto = texto.replace(acento, sin_acento)
-                    return texto.lower().strip()
+                # Filtros simplificados (solo NIT y Código) - REACTIVOS
+                col_filtro1, col_filtro2 = st.columns(2)
 
                 # Función helper para normalizar NITs (maneja float y string)
                 def normalizar_nit(valor):
@@ -1197,36 +1218,34 @@ elif seleccion == "📊 Reportes desde Master":
                     except:
                         return str(valor).strip() if str(valor).strip() else None
 
-                # Detectar columna NIT de forma flexible
+                # Detectar columnas antes de empezar
+                columnas_nit_posibles = ['NIT', 'nit', 'NIT Cliente', 'Nit']
                 columna_nit = None
-                for col in df_seleccionado.columns:
-                    col_normalizado = normalizar_texto(col)
-                    # Buscar variaciones de "nit"
-                    if 'nit' in col_normalizado:
+                for col in columnas_nit_posibles:
+                    if col in df_seleccionado.columns:
                         columna_nit = col
                         break
 
-                # Detectar columna de Código de desembolso de forma flexible
+                # IMPORTANTE: Buscar TODAS las variaciones de código de desembolso
+                columnas_codigo_posibles = [
+                    'Codigo del desembolso',
+                    'Código del desembolso',  # Con tilde
+                    'Codigo de desembolso',
+                    'Código de desembolso',
+                    'codigo del desembolso',
+                    'Código',
+                    'codigo',
+                    'Codigo'
+                ]
+
+                # Encontrar TODAS las columnas de código que existen
                 columnas_codigo_encontradas = []
                 for col in df_seleccionado.columns:
-                    col_normalizado = normalizar_texto(col)
-                    # Buscar si contiene "codigo" y "desembolso"
-                    if 'codigo' in col_normalizado and 'desembolso' in col_normalizado:
-                        columnas_codigo_encontradas.append(col)
-                    # O solo "codigo" si no hay otra opción
-                    elif col_normalizado == 'codigo':
+                    if any(posible.lower() == col.lower() for posible in columnas_codigo_posibles):
                         columnas_codigo_encontradas.append(col)
 
                 # Usar la primera encontrada como referencia
                 columna_codigo = columnas_codigo_encontradas[0] if columnas_codigo_encontradas else None
-
-                # Detectar TODAS las columnas de fecha disponibles
-                columnas_fecha_disponibles = []
-                for col in df_seleccionado.columns:
-                    col_normalizado = normalizar_texto(col)
-                    # Buscar cualquier columna que tenga "fecha"
-                    if 'fecha' in col_normalizado:
-                        columnas_fecha_disponibles.append(col)
 
                 # Normalizar columna NIT para filtrado consistente
                 if columna_nit:
@@ -1300,167 +1319,21 @@ elif seleccion == "📊 Reportes desde Master":
                         st.warning("⚠️ No se encontró columna de código de desembolso")
                         filtro_codigo = []
 
-                with col_filtro3:
-                    # Filtro por Fecha
-                    st.markdown("**📅 Filtro por Fecha**")
-
-                    if columnas_fecha_disponibles:
-                        # Permitir seleccionar qué columna de fecha usar
-                        columna_fecha_seleccionada = st.selectbox(
-                            "Columna de fecha:",
-                            options=columnas_fecha_disponibles,
-                            index=0,
-                            key="columna_fecha_selector",
-                            help="Selecciona qué columna de fecha usar para filtrar"
-                        )
-
-                        # Convertir la columna seleccionada a datetime
-                        try:
-                            df_seleccionado['_Fecha_normalizada'] = pd.to_datetime(
-                                df_seleccionado[columna_fecha_seleccionada],
-                                errors='coerce'
-                            )
-                            columna_fecha = columna_fecha_seleccionada
-                        except:
-                            columna_fecha = None
-                            st.error("❌ No se pudo convertir la columna a fecha")
-                    else:
-                        columna_fecha = None
-
-                    if columna_fecha and '_Fecha_normalizada' in df_seleccionado.columns:
-
-                        # Obtener rango de fechas disponibles
-                        fechas_validas = df_seleccionado['_Fecha_normalizada'].dropna()
-
-                        if len(fechas_validas) > 0:
-                            fecha_min = fechas_validas.min().date()
-                            fecha_max = fechas_validas.max().date()
-
-                            # Selector de rango de fechas
-                            usar_filtro_fecha = st.checkbox(
-                                "Activar filtro de fecha",
-                                value=False,
-                                help="Filtra registros por rango de fechas",
-                                key="usar_filtro_fecha"
-                            )
-
-                            if usar_filtro_fecha:
-                                fecha_desde = st.date_input(
-                                    "Desde:",
-                                    value=fecha_min,
-                                    min_value=fecha_min,
-                                    max_value=fecha_max,
-                                    key="fecha_desde_master"
-                                )
-
-                                fecha_hasta = st.date_input(
-                                    "Hasta:",
-                                    value=fecha_max,
-                                    min_value=fecha_min,
-                                    max_value=fecha_max,
-                                    key="fecha_hasta_master"
-                                )
-
-                                st.caption(f"💡 Rango disponible: {fecha_min.year} - {fecha_max.year}")
-                            else:
-                                fecha_desde = None
-                                fecha_hasta = None
-                        else:
-                            st.warning("⚠️ No hay fechas válidas")
-                            fecha_desde = None
-                            fecha_hasta = None
-                            usar_filtro_fecha = False
-                    else:
-                        st.warning("⚠️ No se encontró columna de fecha")
-                        fecha_desde = None
-                        fecha_hasta = None
-                        usar_filtro_fecha = False
-
                 st.markdown("---")
 
                 # Aplicar filtros
                 df_filtrado = df_seleccionado.copy()
-                registros_inicial = len(df_filtrado)
 
-                # Aplicar filtro de NIT (usando columna normalizada Y buscando en código de desembolso)
+                # Aplicar filtro de NIT (usando columna normalizada)
                 if filtro_nit and columna_nit:
-                    # Filtro 1: Coincidencia directa en columna NIT
-                    filtro_por_columna_nit = df_filtrado['_NIT_normalizado'].isin(filtro_nit)
-
-                    # Filtro 2: Buscar NIT en código de desembolso (formato CO:nit:NUM:NUM:LETRAS)
-                    if columnas_codigo_encontradas and '_Codigo_unificado' in df_filtrado.columns:
-                        filtro_por_codigo = pd.Series([False] * len(df_filtrado), index=df_filtrado.index)
-
-                        for nit in filtro_nit:
-                            # Buscar el patrón "CO:nit:" en el código de desembolso
-                            filtro_por_codigo = filtro_por_codigo | df_filtrado['_Codigo_unificado'].str.contains(
-                                f'CO:{nit}:',
-                                na=False,
-                                case=False,
-                                regex=False
-                            )
-
-                        # Combinar ambos filtros con OR (incluir si cumple cualquiera de los dos)
-                        df_filtrado = df_filtrado[filtro_por_columna_nit | filtro_por_codigo]
-                    else:
-                        # Si no hay columna de código, solo usar filtro de NIT directo
-                        df_filtrado = df_filtrado[filtro_por_columna_nit]
+                    df_filtrado = df_filtrado[df_filtrado['_NIT_normalizado'].isin(filtro_nit)]
 
                 # Aplicar filtro de Código (usando columna unificada)
-                registros_despues_nit = len(df_filtrado)
                 if filtro_codigo and columnas_codigo_encontradas:
                     df_filtrado = df_filtrado[df_filtrado['_Codigo_unificado'].isin(filtro_codigo)]
 
-                # Aplicar filtro de Fecha (si está activado)
-                registros_despues_codigo = len(df_filtrado)
-                if usar_filtro_fecha and columna_fecha and fecha_desde and fecha_hasta:
-                    # Convertir fechas a datetime para comparación
-                    fecha_desde_dt = pd.to_datetime(fecha_desde)
-                    fecha_hasta_dt = pd.to_datetime(fecha_hasta) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)  # Incluir todo el día
-
-                    df_filtrado = df_filtrado[
-                        (df_filtrado['_Fecha_normalizada'] >= fecha_desde_dt) &
-                        (df_filtrado['_Fecha_normalizada'] <= fecha_hasta_dt)
-                    ]
-
-                # Mostrar información de filtros aplicados
-                registros_final = len(df_filtrado)
-
-                with st.expander("🔍 Debug de Filtros", expanded=False):
-                    st.caption(f"📊 Registros iniciales: {registros_inicial:,}")
-
-                    # Mostrar distribución por tipo si es consolidado
-                    if nombre_seleccion == "Consolidado" and 'Tipo Factura' in df_seleccionado.columns:
-                        st.markdown("**Distribución inicial por tipo:**")
-                        dist_inicial = df_seleccionado['Tipo Factura'].value_counts()
-                        for tipo, count in dist_inicial.items():
-                            st.caption(f"  • {tipo}: {count:,} registros")
-
-                    if filtro_nit:
-                        st.caption(f"📊 Después de filtrar por NIT: {registros_despues_nit:,}")
-                        if nombre_seleccion == "Consolidado" and 'Tipo Factura' in df_filtrado.columns and registros_despues_nit > 0:
-                            dist_nit = df_filtrado['Tipo Factura'].value_counts()
-                            for tipo, count in dist_nit.items():
-                                st.caption(f"    → {tipo}: {count:,}")
-
-                    if filtro_codigo:
-                        st.caption(f"📊 Después de filtrar por Código: {registros_despues_codigo:,}")
-                        if nombre_seleccion == "Consolidado" and 'Tipo Factura' in df_filtrado.columns and registros_despues_codigo > 0:
-                            dist_codigo = df_filtrado['Tipo Factura'].value_counts()
-                            for tipo, count in dist_codigo.items():
-                                st.caption(f"    → {tipo}: {count:,}")
-
-                    if usar_filtro_fecha:
-                        st.caption(f"📊 Después de filtrar por Fecha ({fecha_desde} a {fecha_hasta}): {registros_final:,}")
-                        if nombre_seleccion == "Consolidado" and 'Tipo Factura' in df_filtrado.columns and registros_final > 0:
-                            dist_fecha = df_filtrado['Tipo Factura'].value_counts()
-                            for tipo, count in dist_fecha.items():
-                                st.caption(f"    → {tipo}: {count:,}")
-
-                    st.caption(f"✅ **Total final: {registros_final:,} registros**")
-
                 # Limpiar columnas temporales del resultado final
-                columnas_temporales = ['_NIT_normalizado', '_Codigo_unificado', '_Fecha_normalizada']
+                columnas_temporales = ['_NIT_normalizado', '_Codigo_unificado']
                 for col_temp in columnas_temporales:
                     if col_temp in df_filtrado.columns:
                         df_filtrado = df_filtrado.drop(columns=[col_temp])
@@ -1542,107 +1415,125 @@ elif seleccion == "📊 Reportes desde Master":
                 # Guardar en session_state para búsqueda de PDFs
                 st.session_state.df_filtrado_master = df_filtrado
 
-                if len(df_filtrado) == 0:
-                    st.warning("⚠️ No hay registros que cumplan con los filtros seleccionados")
-                else:
-                    # Vista previa del reporte
-                    st.markdown("---")
-                    st.markdown("""
-                        <div style='background: white; border: 2px solid #3C47D3; border-radius: 12px; padding: 20px; margin-bottom: 24px;'>
-                            <h3 style='font-size: 18px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
-                                👀 Vista Previa del Reporte
-                            </h3>
-                            <p style='font-size: 14px; color: #6B7280; margin-bottom: 0;'>
-                                Revisa los datos antes de descargar o subir a Drive
-                            </p>
+                # Mostrar resultado de filtros con diseño mejorado
+                st.markdown("### 📊 Resultado de Filtros")
+
+                col_res1, col_res2 = st.columns(2)
+                with col_res1:
+                    st.markdown(f"""
+                        <div style='background: white; border: 1px solid #D1D5DB; border-radius: 12px; padding: 20px; text-align: center;'>
+                            <div style='font-size: 36px; font-weight: 700; color: #6B7280; margin-bottom: 8px;'>
+                                {len(df_seleccionado):,}
+                            </div>
+                            <div style='font-size: 14px; color: #6B7280; font-weight: 600;'>
+                                Registros totales
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                with col_res2:
+                    st.markdown(f"""
+                        <div style='background: white; border: 2px solid #3C47D3; border-radius: 12px; padding: 20px; text-align: center;'>
+                            <div style='font-size: 36px; font-weight: 700; color: #3C47D3; margin-bottom: 8px;'>
+                                {len(df_filtrado):,}
+                            </div>
+                            <div style='font-size: 14px; color: #0C147B; font-weight: 600;'>
+                                ✅ Registros filtrados
+                            </div>
                         </div>
                     """, unsafe_allow_html=True)
 
-                    # Mostrar estadísticas básicas
-                    col_stat1, col_stat2, col_stat3 = st.columns(3)
+                if len(df_filtrado) == 0:
+                    st.warning("⚠️ No hay registros que cumplan con los filtros seleccionados")
+                else:
+                    st.markdown("---")
 
-                    with col_stat1:
-                        st.markdown(f"""
-                            <div style='background: white; border: 1px solid #D1D5DB; border-radius: 8px; padding: 16px; text-align: center;'>
-                                <div style='font-size: 28px; font-weight: 700; color: #3C47D3;'>{len(df_filtrado):,}</div>
-                                <div style='font-size: 13px; color: #6B7280;'>Registros</div>
-                            </div>
-                        """, unsafe_allow_html=True)
-
-                    with col_stat2:
-                        st.markdown(f"""
-                            <div style='background: white; border: 1px solid #D1D5DB; border-radius: 8px; padding: 16px; text-align: center;'>
-                                <div style='font-size: 28px; font-weight: 700; color: #3C47D3;'>{len(df_filtrado.columns)}</div>
-                                <div style='font-size: 13px; color: #6B7280;'>Columnas</div>
-                            </div>
-                        """, unsafe_allow_html=True)
-
-                    with col_stat3:
-                        # Calcular suma de valores si hay columna numérica de valor
-                        columnas_valor = [col for col in df_filtrado.columns if any(x in str(col).lower() for x in ['valor', 'monto', 'total', 'importe'])]
-                        if columnas_valor:
-                            try:
-                                total_valor = df_filtrado[columnas_valor[0]].sum()
-                                st.markdown(f"""
-                                    <div style='background: white; border: 1px solid #D1D5DB; border-radius: 8px; padding: 16px; text-align: center;'>
-                                        <div style='font-size: 28px; font-weight: 700; color: #10B981;'>${total_valor:,.0f}</div>
-                                        <div style='font-size: 13px; color: #6B7280;'>Total</div>
-                                    </div>
-                                """, unsafe_allow_html=True)
-                            except:
-                                st.markdown(f"""
-                                    <div style='background: white; border: 1px solid #D1D5DB; border-radius: 8px; padding: 16px; text-align: center;'>
-                                        <div style='font-size: 28px; font-weight: 700; color: #6B7280;'>-</div>
-                                        <div style='font-size: 13px; color: #6B7280;'>Total</div>
-                                    </div>
-                                """, unsafe_allow_html=True)
-                        else:
-                            st.markdown(f"""
-                                <div style='background: white; border: 1px solid #D1D5DB; border-radius: 8px; padding: 16px; text-align: center;'>
-                                    <div style='font-size: 28px; font-weight: 700; color: #6B7280;'>-</div>
-                                    <div style='font-size: 13px; color: #6B7280;'>Total</div>
-                                </div>
-                            """, unsafe_allow_html=True)
-
-                    # DataFrame interactivo
-                    st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
-                    st.dataframe(
-                        df_filtrado,
-                        use_container_width=True,
-                        height=400
-                    )
-
-                    st.caption(f"📊 Mostrando {len(df_filtrado):,} registros filtrados")
+                    # Vista previa
+                    with st.expander("👀 Vista Previa (primeras 20 filas)", expanded=False):
+                        st.dataframe(df_filtrado.head(20), use_container_width=True)
 
                     st.markdown("---")
 
-                    # Opción de descarga
+                    # Opciones de descarga/subida
                     timestamp = datetime.now().strftime('%Y-%m-%d_%H%M%S')
                     nombre_archivo = f"Reporte_Master_{nombre_seleccion.replace(' ', '_')}_{timestamp}"
 
-                    st.markdown("### 📥 Descargar Reporte")
+                    col_down1, col_down2 = st.columns(2)
 
-                    # Generar Excel
-                    buffer_excel = BytesIO()
-                    with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
-                        df_filtrado.to_excel(writer, sheet_name=nombre_seleccion[:31], index=False)
+                    with col_down1:
+                        st.markdown("### 📥 Descargar Excel")
 
-                    st.download_button(
-                        label="📥 Descargar Excel",
-                        data=buffer_excel.getvalue(),
-                        file_name=f"{nombre_archivo}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
+                        # Generar Excel
+                        buffer_excel = BytesIO()
+                        with pd.ExcelWriter(buffer_excel, engine='openpyxl') as writer:
+                            df_filtrado.to_excel(writer, sheet_name=nombre_seleccion[:31], index=False)
+
+                        st.download_button(
+                            label="📥 Descargar Excel",
+                            data=buffer_excel.getvalue(),
+                            file_name=f"{nombre_archivo}.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+
+                    with col_down2:
+                        st.markdown("### 📤 Subir a Drive")
+
+                        if st.button("🚀 Subir a Google Drive", type="primary", use_container_width=True):
+                            with st.spinner("📤 Subiendo a Google Drive..."):
+                                # Crear/obtener carpeta "Reportes Facturación"
+                                folder_id = drive_manager.create_folder_if_not_exists(drive_manager.FOLDER_REPORTES)
+
+                                if folder_id:
+                                    # Subir archivo
+                                    result = drive_manager.upload_file(
+                                        buffer_excel.getvalue(),
+                                        f"{nombre_archivo}.xlsx",
+                                        folder_id
+                                    )
+
+                                    if result:
+                                        st.success(f"✅ ¡Archivo subido exitosamente!")
+                                        st.link_button(
+                                            "🔗 Abrir en Google Drive",
+                                            result['link'],
+                                            use_container_width=True
+                                        )
+                                    else:
+                                        st.error("❌ Error al subir el archivo")
+                                else:
+                                    st.error(f"❌ Error al crear/obtener carpeta '{drive_manager.FOLDER_REPORTES}'")
+
+            else:
+                st.markdown("""
+                    <div class='info-banner'>
+                        <div style='font-size: 16px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
+                            👆 Carga los datos del Master para comenzar
+                        </div>
+                        <div style='font-size: 14px; color: #6B7280;'>
+                            Haz clic en el botón "Cargar Datos del Master" para cargar el archivo y generar reportes
+                        </div>
+                    </div>
+                """, unsafe_allow_html=True)
 
         # ========== BUSCAR PDFs EN DRIVE ==========
         st.markdown("<div style='margin-top: 2.5rem;'></div>", unsafe_allow_html=True)
+        st.markdown("""
+            <div class='card-info' style='padding: 24px; margin-bottom: 24px;'>
+                <h3 style='font-size: 20px; font-weight: 600; color: #0C147B; margin-bottom: 8px;'>
+                    🔍 Buscar PDFs de Facturas
+                </h3>
+                <p style='font-size: 14px; color: #6B7280; margin-bottom: 0;'>
+                    Busca PDFs automáticamente desde el reporte o manualmente por número de factura
+                </p>
+            </div>
+        """, unsafe_allow_html=True)
+
         try:
             drive_manager_pdf = get_drive_manager()
 
             if not drive_manager_pdf or not drive_manager_pdf.is_authenticated():
                 st.warning("⚠️ Conecta con Google Drive primero")
-                st.caption("👈 Usa el botón en la barra lateral izquierda")
+                st.caption("La conexión se hace automáticamente al cargar datos del Master")
             else:
                 # Opción 1: Búsqueda automática desde el reporte filtrado (PRINCIPAL)
                 st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
@@ -1660,7 +1551,7 @@ elif seleccion == "📊 Reportes desde Master":
                 if st.session_state.get('master_loaded') and st.session_state.get('df_filtrado_master') is not None and not st.session_state.df_filtrado_master.empty:
                     df_filtrado = st.session_state.df_filtrado_master
 
-                    if st.button("🔍 Buscar PDFs del Reporte", use_container_width=True, key="btn_search_from_report_master"):
+                    if st.button("🔍 Buscar PDFs del Reporte", type="primary", use_container_width=True, key="btn_search_from_report_master"):
                         # Detectar columna de número de factura
                         columnas_factura_posibles = [
                             '# Factura',
@@ -1697,34 +1588,23 @@ elif seleccion == "📊 Reportes desde Master":
 
                                         # Botón de descarga masiva
                                         st.markdown("### 📦 Descarga Masiva")
-
-                                        # Crear barra de progreso
-                                        progress_zip = st.progress(0)
-                                        status_zip = st.empty()
-
-                                        # Descargar directamente con progreso
-                                        zip_content = drive_manager_pdf.download_multiple_files(
-                                            found,
-                                            progress_bar=progress_zip,
-                                            status_text=status_zip
-                                        )
-
-                                        # Limpiar progreso
-                                        progress_zip.empty()
-                                        status_zip.empty()
-
-                                        if zip_content:
-                                            st.success(f"✅ ZIP listo con {len(found)} archivos")
-                                            st.download_button(
-                                                label=f"📥 Descargar ZIP ({len(found)} archivos)",
-                                                data=zip_content,
-                                                file_name=f"Facturas_Reporte_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-                                                mime="application/zip",
-                                                use_container_width=True,
-                                                key="btn_final_download_zip_auto"
-                                            )
-                                        else:
-                                            st.error("❌ No se pudo generar el ZIP")
+                                        if st.button(
+                                            f"⬇️ Descargar todos ({len(found)}) en ZIP",
+                                            type="primary",
+                                            use_container_width=True,
+                                            key="btn_download_zip_auto"
+                                        ):
+                                            with st.spinner("Preparando descarga..."):
+                                                zip_content = drive_manager_pdf.download_multiple_files(found)
+                                                if zip_content:
+                                                    st.download_button(
+                                                        label=f"📥 Descargar ZIP ({len(found)} archivos)",
+                                                        data=zip_content,
+                                                        file_name=f"Facturas_Reporte_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                                                        mime="application/zip",
+                                                        use_container_width=True,
+                                                        key="btn_final_download_zip_auto"
+                                                    )
 
                                         st.markdown("---")
                                         st.markdown("### 📄 PDFs Encontrados")
@@ -1804,34 +1684,23 @@ elif seleccion == "📊 Reportes desde Master":
 
                                 # Botón de descarga masiva
                                 st.markdown("### 📦 Descarga Masiva")
-
-                                # Crear barra de progreso
-                                progress_zip_m = st.progress(0)
-                                status_zip_m = st.empty()
-
-                                # Descargar directamente con progreso
-                                zip_content = drive_manager_pdf.download_multiple_files(
-                                    found,
-                                    progress_bar=progress_zip_m,
-                                    status_text=status_zip_m
-                                )
-
-                                # Limpiar progreso
-                                progress_zip_m.empty()
-                                status_zip_m.empty()
-
-                                if zip_content:
-                                    st.success(f"✅ ZIP listo con {len(found)} archivos")
-                                    st.download_button(
-                                        label=f"📥 Descargar ZIP ({len(found)} archivos)",
-                                        data=zip_content,
-                                        file_name=f"Facturas_Manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
-                                        mime="application/zip",
-                                        use_container_width=True,
-                                        key="btn_final_download_zip_manual"
-                                    )
-                                else:
-                                    st.error("❌ No se pudo generar el ZIP")
+                                if st.button(
+                                    f"⬇️ Descargar todos ({len(found)}) en ZIP",
+                                    type="primary",
+                                    use_container_width=True,
+                                    key="btn_download_zip_manual"
+                                ):
+                                    with st.spinner("Preparando descarga..."):
+                                        zip_content = drive_manager_pdf.download_multiple_files(found)
+                                        if zip_content:
+                                            st.download_button(
+                                                label=f"📥 Descargar ZIP ({len(found)} archivos)",
+                                                data=zip_content,
+                                                file_name=f"Facturas_Manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip",
+                                                mime="application/zip",
+                                                use_container_width=True,
+                                                key="btn_final_download_zip_manual"
+                                            )
 
                                 st.markdown("---")
                                 st.markdown("### 📄 PDFs Encontrados")
@@ -1874,7 +1743,7 @@ elif seleccion == "📊 Reportes desde Master":
 
 # Footer compacto
 st.markdown("""
-<div style='text-align: center; color: #9CA3AF; font-size: 12px; margin-top: 3rem; padding: 1rem 0; border-top: 1px solid #E5E7EB;'>
-    Sistema de Facturación Finkargo v1.0 - Fase 1 MVP | Octubre 2025
-</div>
+    <div style='text-align: center; color: #9CA3AF; font-size: 12px; margin-top: 3rem; padding: 1rem 0; border-top: 1px solid #E5E7EB;'>
+        Sistema de Facturación Finkargo v1.0 - Fase 1 MVP | Octubre 2025
+    </div>
 """, unsafe_allow_html=True)

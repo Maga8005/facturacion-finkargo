@@ -42,7 +42,10 @@ data/logs/*.log
 
 # Config sensible
 config/sheets_config.json
+config/google_credentials.json
+config/service_account.json
 *.json.backup
+token.json
 
 # OS
 .DS_Store

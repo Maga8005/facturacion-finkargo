@@ -1,0 +1,1110 @@
+/* ============================================
+   SISTEMA DE DISEÑO FINKARGO - STREAMLIT
+   Facturación - Consolidación de Facturas
+   VERSIÓN 2.0 - DISEÑO MEJORADO
+   ============================================ */
+
+/* ========== VARIABLES CSS ========== */
+:root {
+    /* Colores Primarios (marca) */
+    --primary-900: #050A53;
+    --primary-700: #0C147B;
+    --primary-500: #3C47D3;
+    --primary-300: #77A1E2;
+    --primary-100: #E8F0FC;
+    --primary-50: #F5F8FE;
+
+    /* Colores Semánticos */
+    --success: #10B981;
+    --success-light: #D1FAE5;
+    --warning: #F59E0B;
+    --warning-light: #FEF3C7;
+    --error: #EF4444;
+    --error-light: #FEE2E2;
+    --info: #3B82F6;
+    --info-light: #DBEAFE;
+
+    /* Colores Neutrales */
+    --gray-900: #111827;
+    --gray-700: #374151;
+    --gray-500: #6B7280;
+    --gray-300: #D1D5DB;
+    --gray-100: #F3F4F6;
+    --gray-50: #F9FAFB;
+    --white: #FFFFFF;
+
+    /* Espaciado (escala de 8px) */
+    --spacing-1: 4px;
+    --spacing-2: 8px;
+    --spacing-3: 12px;
+    --spacing-4: 16px;
+    --spacing-5: 24px;
+    --spacing-6: 32px;
+    --spacing-7: 48px;
+    --spacing-8: 64px;
+
+    /* Bordes y Sombras */
+    --radius-sm: 6px;
+    --radius-md: 8px;
+    --radius-lg: 12px;
+    --radius-xl: 16px;
+
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 12px rgba(60, 71, 211, 0.1);
+    --shadow-lg: 0 10px 24px rgba(60, 71, 211, 0.15);
+}
+
+/* ========== RESET Y BASE ========== */
+* {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+}
+
+body {
+    background-color: var(--gray-50);
+    color: var(--gray-700);
+    line-height: 1.6;
+}
+
+/* ========== CONFIGURACIÓN BASE ========== */
+.block-container {
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+    padding-left: 3rem !important;
+    padding-right: 3rem !important;
+    max-width: 1400px !important;
+}
+
+/* Forzar reset de estilos inline de Streamlit */
+button[data-testid],
+button[kind] {
+    background-color: unset !important;
+}
+
+/* ========== REDUCIR PADDING Y ESPACIADO GLOBAL ========== */
+
+/* Reducir espacio entre elementos */
+.element-container {
+    margin-bottom: 0.5rem !important;
+}
+
+/* Reducir espacio en columnas */
+[data-testid="column"] {
+    padding: 0.5rem !important;
+}
+
+/* Reducir gap entre elementos en columnas */
+div[data-testid="column"] > div {
+    gap: 0.5rem !important;
+}
+
+/* Quitar padding extra de botones */
+.row-widget.stButton {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+
+/* ========== TIPOGRAFÍA ========== */
+h1, .stTitle {
+    font-size: 32px !important;
+    font-weight: 700 !important;
+    color: var(--primary-900) !important;
+    line-height: 1.2 !important;
+    margin-bottom: 0.5rem !important;
+    margin-top: 0 !important;
+}
+
+h2, .stSubheader {
+    font-size: 24px !important;
+    font-weight: 600 !important;
+    color: var(--primary-700) !important;
+    line-height: 1.3 !important;
+    margin-bottom: 0.5rem !important;
+    margin-top: 1rem !important;
+}
+
+h3 {
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    color: var(--primary-700) !important;
+    line-height: 1.4 !important;
+    margin-bottom: 0.5rem !important;
+    margin-top: 0.5rem !important;
+}
+
+p, .stMarkdown {
+    font-size: 16px;
+    color: var(--gray-700);
+    line-height: 1.6;
+}
+
+.stCaption, small {
+    font-size: 14px !important;
+    color: var(--gray-500) !important;
+    line-height: 1.5 !important;
+}
+
+/* ========== BOTONES MEJORADOS ==================== */
+/* Botón primario con gradiente - Selectores más específicos */
+.stButton > button,
+button[kind="primary"],
+button[data-testid*="baseButton"],
+div.stButton > button[data-testid="baseButton-primary"],
+div.stButton > button,
+div[data-testid="stButton"] > button,
+button[type="primary"],
+button[class*="st-"] {
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1.5rem !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    transition: all 0.2s ease !important;
+    width: 100% !important;
+    box-shadow: 0 2px 4px rgba(60, 71, 211, 0.2) !important;
+}
+
+/* ========== FORZAR TEXTO BLANCO CON MÁXIMA PRIORIDAD ========== */
+/* Usar atributos para capturar todos los elementos de botones de Streamlit */
+button[data-testid*="baseButton"] p,
+button[data-testid*="baseButton"] span,
+button[data-testid*="baseButton"] div,
+button[data-testid*="baseButton"] *,
+div[data-testid="stButton"] button p,
+div[data-testid="stButton"] button span,
+div[data-testid="stButton"] button div,
+div[data-testid="stButton"] button *,
+div.stButton button p,
+div.stButton button span,
+div.stButton button div,
+div.stButton button *,
+.stButton button p,
+.stButton button span,
+.stButton button div,
+.stButton button *,
+button[kind="primary"] p,
+button[kind="primary"] span,
+button[kind="primary"] div,
+button[kind="primary"] *,
+button[type="primary"] p,
+button[type="primary"] span,
+button[type="primary"] div,
+button[type="primary"] * {
+    color: #FFFFFF !important;
+    fill: #FFFFFF !important;
+}
+
+/* Selector nuclear - forzar en TODOS los descendientes de botones */
+[data-testid="stButton"] * {
+    color: #FFFFFF !important;
+}
+
+.stButton * {
+    color: #FFFFFF !important;
+}
+
+/* Forzar específicamente en elementos p dentro de botones */
+button p[data-testid],
+button p[class],
+button p {
+    color: #FFFFFF !important;
+}
+
+/* ========== EXCEPCIÓN: Botón de colapsar sidebar ========== */
+/* Botón limpio con fondo blanco e ícono gris - Con máxima especificidad */
+button[kind="header"],
+button[data-testid="baseButton-header"],
+button[data-testid="collapsedControl"],
+[data-testid="collapsedControl"] button,
+section[data-testid="stSidebar"] + div button,
+.css-18ni7ap,
+.css-vk3wp9 {
+    background: #FFFFFF !important;
+    color: #6B7280 !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 6px !important;
+    padding: 8px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+    transition: all 0.2s ease !important;
+    width: auto !important;
+    min-width: auto !important;
+}
+
+button[kind="header"] *,
+button[data-testid="baseButton-header"] *,
+button[data-testid="collapsedControl"] *,
+[data-testid="collapsedControl"] button *,
+section[data-testid="stSidebar"] + div button *,
+.css-18ni7ap *,
+.css-vk3wp9 * {
+    color: #6B7280 !important;
+}
+
+button[kind="header"]:hover,
+button[data-testid="baseButton-header"]:hover,
+button[data-testid="collapsedControl"]:hover,
+[data-testid="collapsedControl"] button:hover,
+section[data-testid="stSidebar"] + div button:hover {
+    background: #FFFFFF !important;
+    border-color: #D1D5DB !important;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15) !important;
+    transform: none !important;
+}
+
+button[kind="header"]:hover *,
+button[data-testid="baseButton-header"]:hover *,
+button[data-testid="collapsedControl"]:hover *,
+[data-testid="collapsedControl"] button:hover *,
+section[data-testid="stSidebar"] + div button:hover * {
+    color: #6B7280 !important;
+}
+
+/* Hover state - más específico */
+.stButton > button:hover,
+button[kind="primary"]:hover,
+div.stButton > button:hover,
+div[data-testid="stButton"] > button:hover {
+    background: linear-gradient(135deg, #0C147B 0%, #050A53 100%) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(60, 71, 211, 0.4) !important;
+    color: #FFFFFF !important;
+}
+
+/* Active state - más específico */
+.stButton > button:active,
+button[kind="primary"]:active,
+div.stButton > button:active,
+div[data-testid="stButton"] > button:active {
+    transform: translateY(0) !important;
+    box-shadow: 0 2px 4px rgba(60, 71, 211, 0.2) !important;
+    color: #FFFFFF !important;
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+}
+
+/* Visited state - después de hacer clic */
+.stButton > button:visited,
+button[kind="primary"]:visited,
+div.stButton > button:visited,
+div[data-testid="stButton"] > button:visited {
+    color: #FFFFFF !important;
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+}
+
+/* Focus state - cuando tiene foco */
+.stButton > button:focus,
+button[kind="primary"]:focus,
+div.stButton > button:focus,
+div[data-testid="stButton"] > button:focus {
+    color: #FFFFFF !important;
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+    outline: none !important;
+}
+
+/* Texto blanco en hover, active, visited y focus - FORZADO CON MÁXIMA ESPECIFICIDAD */
+div[data-testid="stButton"] > button:hover,
+div[data-testid="stButton"] > button:hover *,
+div[data-testid="stButton"] > button:hover > div,
+div[data-testid="stButton"] > button:hover > div > p,
+div[data-testid="stButton"] > button:active,
+div[data-testid="stButton"] > button:active *,
+div[data-testid="stButton"] > button:active > div,
+div[data-testid="stButton"] > button:active > div > p,
+div[data-testid="stButton"] > button:visited,
+div[data-testid="stButton"] > button:visited *,
+div[data-testid="stButton"] > button:focus,
+div[data-testid="stButton"] > button:focus *,
+.stButton > button:hover *,
+.stButton > button:hover,
+.stButton > button:hover p,
+.stButton > button:hover span,
+.stButton > button:hover div,
+button[kind="primary"]:hover,
+button[kind="primary"]:hover *,
+.stButton > button:active *,
+.stButton > button:active,
+.stButton > button:active p,
+.stButton > button:active span,
+.stButton > button:active div,
+button[kind="primary"]:active,
+button[kind="primary"]:active *,
+.stButton > button:visited,
+.stButton > button:visited *,
+.stButton > button:visited p,
+.stButton > button:visited span,
+.stButton > button:visited div,
+button[kind="primary"]:visited,
+button[kind="primary"]:visited *,
+.stButton > button:focus,
+.stButton > button:focus *,
+button[kind="primary"]:focus,
+button[kind="primary"]:focus * {
+    color: #FFFFFF !important;
+}
+
+/* Botón deshabilitado */
+.stButton > button:disabled {
+    background: #E5E7EB !important;
+    color: #9CA3AF !important;
+    cursor: not-allowed !important;
+    box-shadow: none !important;
+}
+
+/* ========== BOTONES DEL SIDEBAR - ESTILO PRIMARY ========== */
+/* Botón de cerrar sesión del sidebar mantiene estilo primary */
+[data-testid="stSidebar"] .stButton > button {
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+    color: #FFFFFF !important;
+    border: none !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1.5rem !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    transition: all 0.2s ease !important;
+    box-shadow: 0 2px 4px rgba(60, 71, 211, 0.2) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: linear-gradient(135deg, #0C147B 0%, #050A53 100%) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(60, 71, 211, 0.4) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button * {
+    color: #FFFFFF !important;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover * {
+    color: #FFFFFF !important;
+}
+
+/* ========== BOTONES SECUNDARIOS (GENERAL) ========== */
+/* Aplica a todos los botones que NO sean primary */
+button[kind="secondary"],
+.stFileUploader button,
+.stButton > button:not([kind="primary"]) {
+    background: transparent !important;
+    border: 2px solid #3C47D3 !important;
+    color: #3C47D3 !important;
+    border-radius: 8px !important;
+    padding: 0.75rem 1.5rem !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    transition: all 0.2s ease !important;
+    box-shadow: none !important;
+}
+
+/* Hover en botones secundarios */
+button[kind="secondary"]:hover,
+.stFileUploader button:hover,
+.stButton > button:not([kind="primary"]):hover {
+    background: #F5F8FE !important;
+    border-color: #0C147B !important;
+    color: #0C147B !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
+/* Texto dentro de botones secundarios */
+button[kind="secondary"] *,
+.stFileUploader button *,
+.stButton > button:not([kind="primary"]) * {
+    color: #3C47D3 !important;
+    background: transparent !important;
+}
+
+/* Texto dentro de botones secundarios en hover */
+button[kind="secondary"]:hover *,
+.stFileUploader button:hover *,
+.stButton > button:not([kind="primary"]):hover * {
+    color: #0C147B !important;
+}
+
+/* ========== RADIO BUTTONS ========== */
+/* Contenedor de radio buttons */
+div[data-testid="stRadio"] {
+    background: transparent !important;
+}
+
+/* Radio buttons horizontales - estilo de tabs */
+div[data-testid="stRadio"][data-baseweb="radio"] > div {
+    gap: 12px !important;
+    background-color: transparent !important;
+}
+
+/* Cada opción del radio button */
+div[data-testid="stRadio"] label {
+    background: linear-gradient(135deg, #E5E7EB 0%, #D1D5DB 100%) !important;
+    color: #374151 !important;
+    border-radius: 12px !important;
+    padding: 12px 24px !important;
+    font-weight: 600 !important;
+    font-size: 15px !important;
+    transition: all 0.3s ease !important;
+    cursor: pointer !important;
+    border: 2px solid transparent !important;
+    min-width: 180px !important;
+    text-align: center !important;
+}
+
+/* Radio button hover */
+div[data-testid="stRadio"] label:hover {
+    background: linear-gradient(135deg, #D1D5DB 0%, #9CA3AF 100%) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Radio button seleccionado */
+div[data-testid="stRadio"] label:has(input:checked) {
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+    color: #FFFFFF !important;
+    border-color: #3C47D3 !important;
+    box-shadow: 0 4px 16px rgba(60, 71, 211, 0.4) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Texto dentro de radio button seleccionado */
+div[data-testid="stRadio"] label:has(input:checked) span,
+div[data-testid="stRadio"] label:has(input:checked) p,
+div[data-testid="stRadio"] label:has(input:checked) div {
+    color: #FFFFFF !important;
+}
+
+/* Ocultar el círculo de radio nativo */
+div[data-testid="stRadio"] input[type="radio"] {
+    display: none !important;
+}
+
+/* ========== CARDS Y CONTENEDORES ========== */
+/* Custom card base */
+.custom-card {
+    background: var(--white);
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 1rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: all 0.2s ease;
+}
+
+.custom-card:hover {
+    box-shadow: 0 4px 12px rgba(60, 71, 211, 0.1);
+    border-color: #77A1E2;
+}
+
+/* Card con estado de éxito */
+.card-success {
+    border-left: 4px solid var(--success) !important;
+    background: linear-gradient(to right, var(--success-light) 0%, var(--white) 100%) !important;
+}
+
+/* Card con estado de advertencia */
+.card-warning {
+    border-left: 4px solid var(--warning) !important;
+    background: linear-gradient(to right, var(--warning-light) 0%, var(--white) 100%) !important;
+}
+
+/* Card con estado informativo */
+.card-info {
+    border-left: 4px solid var(--primary-500) !important;
+    background: linear-gradient(to right, var(--primary-100) 0%, var(--white) 100%) !important;
+}
+
+/* Upload section card - Diseño simple */
+.upload-card {
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.upload-card:hover {
+    border-color: var(--primary-300);
+    box-shadow: var(--shadow-sm);
+}
+
+/* Card con header integrado - Nuevo diseño */
+.upload-card-wrapper {
+    background: white;
+    border: 1px solid #E5E7EB;
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    transition: all 0.2s ease;
+}
+
+.upload-card-wrapper:hover {
+    box-shadow: 0 4px 12px rgba(60, 71, 211, 0.1);
+    border-color: #77A1E2;
+}
+
+.upload-card-header {
+    background: linear-gradient(135deg, #F5F8FE 0%, #E8F0FC 100%);
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #E5E7EB;
+}
+
+.upload-card-header h3 {
+    color: #0C147B !important;
+    font-size: 16px !important;
+    font-weight: 600 !important;
+    margin: 0 !important;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.upload-card-header p {
+    color: #6B7280;
+    font-size: 13px;
+    margin: 4px 0 0 0;
+}
+
+.upload-card-body {
+    padding: 1.5rem;
+}
+
+/* ========== FILE UPLOADER MEJORADO ==================== */
+.stFileUploader {
+    border: 2px dashed #D1D5DB !important;
+    border-radius: 12px !important;
+    padding: 2rem 1rem !important;
+    background: #F9FAFB !important;
+    text-align: center !important;
+    transition: all 0.3s ease !important;
+}
+
+.stFileUploader:hover {
+    border-color: #3C47D3 !important;
+    background: #F5F8FE !important;
+    border-style: solid !important;
+}
+
+.stFileUploader label {
+    color: #6B7280 !important;
+    font-size: 14px !important;
+}
+
+[data-testid="stFileUploader"] section {
+    border: none !important;
+    padding: 0 !important;
+}
+
+/* Archivo cargado */
+[data-testid="stFileUploader"] > div > div {
+    background: var(--success-light) !important;
+    border: 1px solid var(--success) !important;
+    border-radius: var(--radius-md) !important;
+    padding: var(--spacing-3) !important;
+}
+
+/* ========== ALERTAS/MENSAJES MEJORADAS ==================== */
+/* Success */
+.stSuccess {
+    background: #D1FAE5 !important;
+    border: 1px solid #10B981 !important;
+    border-left: 4px solid #10B981 !important;
+    color: #065F46 !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: 8px !important;
+}
+
+/* Info */
+.stInfo {
+    background: #E8F0FC !important;
+    border: 1px solid #3C47D3 !important;
+    border-left: 4px solid #3C47D3 !important;
+    color: #0C147B !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: 8px !important;
+}
+
+/* Warning */
+.stWarning {
+    background: #FEF3C7 !important;
+    border: 1px solid #F59E0B !important;
+    border-left: 4px solid #F59E0B !important;
+    color: #92400E !important;
+    padding: 0.75rem 1rem !important;
+    border-radius: 8px !important;
+}
+
+/* Error */
+.stError {
+    background: var(--error-light) !important;
+    border: 1px solid var(--error) !important;
+    border-left: 4px solid var(--error) !important;
+    border-radius: 8px !important;
+    color: #991B1B !important;
+    padding: 0.75rem 1rem !important;
+}
+
+/* ========== INPUTS Y FORMULARIOS ========== */
+.stTextInput > div > div > input,
+.stTextArea > div > div > textarea,
+.stSelectbox > div > div > div,
+.stMultiSelect > div > div > div {
+    border: 1px solid var(--gray-300) !important;
+    border-radius: var(--radius-md) !important;
+    padding: 10px 14px !important;
+    font-size: 14px !important;
+    color: var(--gray-900) !important;
+    transition: all 0.2s ease !important;
+    min-height: 44px !important;
+    line-height: 1.5 !important;
+}
+
+/* Estandarizar altura de selectbox y multiselect */
+.stSelectbox > div > div,
+.stMultiSelect > div > div {
+    min-height: 44px !important;
+}
+
+/* Placeholder text styling */
+.stSelectbox input::placeholder,
+.stMultiSelect input::placeholder {
+    color: var(--gray-500) !important;
+    opacity: 0.7 !important;
+}
+
+/* MultiSelect selected items (tags/chips) */
+.stMultiSelect span[data-baseweb="tag"] {
+    background-color: var(--primary-100) !important;
+    border: 1px solid var(--primary-300) !important;
+    color: var(--primary-700) !important;
+    padding: 4px 8px !important;
+    border-radius: 4px !important;
+    font-size: 13px !important;
+    margin: 2px !important;
+}
+
+.stTextInput > div > div > input:hover,
+.stTextArea > div > div > textarea:hover,
+.stSelectbox > div > div > div:hover,
+.stMultiSelect > div > div > div:hover {
+    border-color: var(--primary-300) !important;
+}
+
+.stTextInput > div > div > input:focus,
+.stTextArea > div > div > textarea:focus,
+.stSelectbox > div > div > div:focus,
+.stMultiSelect > div > div > div:focus {
+    border-color: var(--primary-500) !important;
+    box-shadow: 0 0 0 3px rgba(60, 71, 211, 0.1) !important;
+    outline: none !important;
+}
+
+/* Labels */
+.stTextInput > label,
+.stTextArea > label,
+.stSelectbox > label,
+.stMultiSelect > label {
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    color: var(--primary-700) !important;
+    margin-bottom: var(--spacing-2) !important;
+}
+
+/* ========== SIDEBAR MEJORADO ==================== */
+[data-testid="stSidebar"] {
+    background-color: white !important;
+    padding: 1rem !important;
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 999 !important;
+}
+
+/* OCULTAR el botón de toggle/colapso de sidebar - sidebar fijo */
+button[kind="header"],
+button[data-testid="baseButton-header"],
+button[data-testid="collapsedControl"],
+[data-testid="collapsedControl"],
+[data-testid="collapsedControl"] button,
+.css-18ni7ap,
+.css-vk3wp9,
+.st-emotion-cache-qmp9ai,
+button.st-emotion-cache-qmp9ai,
+.e6f82ta8 {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Asegurar que el contenedor de sidebar esté visible */
+section[data-testid="stSidebar"],
+[data-testid="stSidebar"] {
+    display: block !important;
+    visibility: visible !important;
+}
+
+/* Botón hamburguesa para expandir/colapsar sidebar - con múltiples selectores */
+[data-testid="collapsedControl"],
+button[data-testid="collapsedControl"],
+.stSidebarCollapsedControl,
+section[data-testid="stSidebar"] + div button {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    z-index: 999999 !important;
+    pointer-events: auto !important;
+}
+
+[data-testid="stSidebar"] h3 {
+    font-size: 14px !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6B7280 !important;
+    margin-bottom: 0.75rem !important;
+}
+
+[data-testid="stSidebar"] h1,
+[data-testid="stSidebar"] h2 {
+    color: var(--primary-700) !important;
+}
+
+/* ========== TABS JERÁRQUICAS - NIVEL 1 Y NIVEL 2 ==================== */
+
+/* ==================== TABS PRINCIPALES (Nivel 1) ==================== */
+/* Estas son las pestañas principales del nivel superior */
+
+/* Contenedor principal de tabs */
+.stTabs {
+    background-color: transparent;
+    margin-bottom: 2rem;
+}
+
+/* Lista de tabs principales (nivel 1) - directamente bajo el root */
+.stTabs[data-baseweb="tabs"]:not(.stTabs .stTabs) > div[role="tablist"] {
+    gap: 12px !important;
+    background-color: transparent !important;
+    padding: 0 !important;
+    border: none !important;
+    margin-bottom: 1.5rem !important;
+}
+
+/* Tab principal individual (nivel 1) */
+.stTabs[data-baseweb="tabs"]:not(.stTabs .stTabs) > div[role="tablist"] > button[role="tab"] {
+    height: 60px !important;
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+    color: white !important;
+    border-radius: 12px !important;
+    padding: 16px 32px !important;
+    font-weight: 600 !important;
+    font-size: 16px !important;
+    border: none !important;
+    box-shadow: 0 2px 8px rgba(60, 71, 211, 0.3) !important;
+    transition: all 0.3s ease !important;
+}
+
+/* Tab principal hover (nivel 1) */
+.stTabs[data-baseweb="tabs"]:not(.stTabs .stTabs) > div[role="tablist"] > button[role="tab"]:hover {
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 16px rgba(60, 71, 211, 0.4) !important;
+}
+
+/* Tab principal seleccionada (nivel 1) - más brillante */
+.stTabs[data-baseweb="tabs"]:not(.stTabs .stTabs) > div[role="tablist"] > button[role="tab"][aria-selected="true"] {
+    background: linear-gradient(135deg, #3C47D3 0%, #0C147B 100%) !important;
+    box-shadow: 0 4px 20px rgba(60, 71, 211, 0.5) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Tab principal NO seleccionada (nivel 1) - más opaca */
+.stTabs[data-baseweb="tabs"]:not(.stTabs .stTabs) > div[role="tablist"] > button[role="tab"][aria-selected="false"] {
+    background: linear-gradient(135deg, #9CA3AF 0%, #6B7280 100%) !important;
+    opacity: 0.6 !important;
+}
+
+/* ==================== SUB-TABS (Nivel 2) ==================== */
+/* Estas son las pestañas secundarias dentro de cada sección principal */
+
+/* Lista de sub-tabs (nivel 2) - tabs dentro de tabs */
+.stTabs .stTabs[data-baseweb="tabs"] > div[role="tablist"] {
+    gap: 8px !important;
+    background-color: #F9FAFB !important;
+    padding: 8px !important;
+    border-radius: 12px !important;
+    border: 1px solid #E5E7EB !important;
+    margin-bottom: 1.5rem !important;
+}
+
+/* Sub-tab individual (nivel 2) no seleccionada */
+.stTabs .stTabs[data-baseweb="tabs"] > div[role="tablist"] > button[role="tab"] {
+    height: 44px !important;
+    padding: 10px 20px !important;
+    background-color: transparent !important;
+    border-radius: 8px !important;
+    color: #6B7280 !important;
+    font-weight: 600 !important;
+    font-size: 14px !important;
+    border: none !important;
+    transition: all 0.2s ease !important;
+}
+
+/* Sub-tab hover (nivel 2) */
+.stTabs .stTabs[data-baseweb="tabs"] > div[role="tablist"] > button[role="tab"]:hover {
+    background-color: #E5E7EB !important;
+    color: #374151 !important;
+}
+
+/* Sub-tab seleccionada (nivel 2) */
+.stTabs .stTabs[data-baseweb="tabs"] > div[role="tablist"] > button[role="tab"][aria-selected="true"] {
+    background-color: white !important;
+    color: #0C147B !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+    border: 1px solid #3C47D3 !important;
+}
+
+/* Remover línea highlight en todas las tabs */
+.stTabs [data-baseweb="tab-highlight"] {
+    background-color: transparent !important;
+    display: none !important;
+}
+
+.stTabs [data-baseweb="tab-border"] {
+    display: none !important;
+}
+
+/* Panel de contenido de tabs */
+.stTabs [data-baseweb="tab-panel"] {
+    padding-top: 1.5rem;
+}
+
+/* ========== MÉTRICAS ========== */
+[data-testid="stMetric"] {
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-4);
+    box-shadow: var(--shadow-sm);
+    transition: all 0.2s ease;
+}
+
+[data-testid="stMetric"]:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-300);
+}
+
+[data-testid="stMetricValue"] {
+    font-size: 32px !important;
+    font-weight: 700 !important;
+    color: var(--primary-700) !important;
+}
+
+[data-testid="stMetricLabel"] {
+    font-size: 14px !important;
+    color: var(--gray-500) !important;
+    font-weight: 600 !important;
+}
+
+/* ========== EXPANDERS ========== */
+.streamlit-expanderHeader {
+    background-color: var(--gray-50) !important;
+    border: 1px solid var(--gray-300) !important;
+    border-radius: var(--radius-md) !important;
+    font-weight: 600 !important;
+    color: var(--primary-700) !important;
+    padding: var(--spacing-3) var(--spacing-4) !important;
+    transition: all 0.2s ease !important;
+}
+
+.streamlit-expanderHeader:hover {
+    background-color: var(--primary-50) !important;
+    border-color: var(--primary-300) !important;
+}
+
+/* ========== DATAFRAMES ========== */
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--gray-300) !important;
+    border-radius: var(--radius-md) !important;
+    overflow: hidden;
+}
+
+/* ========== SPINNER ========== */
+.stSpinner > div {
+    border-color: var(--primary-500) var(--primary-100) var(--primary-100) !important;
+}
+
+/* ========== ANIMACIONES ========== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-10px);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+}
+
+/* ========== UTILIDADES ADICIONALES ==================== */
+.text-muted {
+    color: #6B7280;
+    font-size: 14px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.badge-success {
+    background: #D1FAE5;
+    color: #065F46;
+}
+
+.badge-warning {
+    background: #FEF3C7;
+    color: #92400E;
+}
+
+.badge-info {
+    background: #E8F0FC;
+    color: #0C147B;
+}
+
+/* ========== UTILIDADES ========== */
+.text-center {
+    text-align: center !important;
+}
+
+.mb-1 { margin-bottom: var(--spacing-1) !important; }
+.mb-2 { margin-bottom: var(--spacing-2) !important; }
+.mb-3 { margin-bottom: var(--spacing-3) !important; }
+.mb-4 { margin-bottom: var(--spacing-4) !important; }
+.mb-5 { margin-bottom: var(--spacing-5) !important; }
+
+.mt-1 { margin-top: var(--spacing-1) !important; }
+.mt-2 { margin-top: var(--spacing-2) !important; }
+.mt-3 { margin-top: var(--spacing-3) !important; }
+.mt-4 { margin-top: var(--spacing-4) !important; }
+.mt-5 { margin-top: var(--spacing-5) !important; }
+
+.p-1 { padding: var(--spacing-1) !important; }
+.p-2 { padding: var(--spacing-2) !important; }
+.p-3 { padding: var(--spacing-3) !important; }
+.p-4 { padding: var(--spacing-4) !important; }
+.p-5 { padding: var(--spacing-5) !important; }
+
+/* ========== RESPONSIVE ========== */
+@media (max-width: 768px) {
+    h1, .stTitle {
+        font-size: 24px !important;
+    }
+
+    h2, .stSubheader {
+        font-size: 20px !important;
+    }
+
+    h3 {
+        font-size: 16px !important;
+    }
+
+    [data-testid="stMetricValue"] {
+        font-size: 24px !important;
+    }
+
+    .stButton > button {
+        width: 100% !important;
+    }
+}
+
+/* ========== CUSTOM CLASSES ========== */
+/* Badge de conteo */
+.badge-count {
+    display: inline-block;
+    background: var(--primary-500);
+    color: var(--white);
+    font-size: 24px;
+    font-weight: 700;
+    padding: var(--spacing-3) var(--spacing-5);
+    border-radius: var(--radius-lg);
+    margin: var(--spacing-2) 0;
+}
+
+/* Sección de upload mejorada */
+.upload-section {
+    background: var(--white);
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-5);
+    margin-bottom: var(--spacing-4);
+    transition: all 0.2s ease;
+}
+
+.upload-section:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-300);
+}
+
+/* Banner informativo */
+.info-banner {
+    background: linear-gradient(135deg, var(--primary-100) 0%, var(--primary-50) 100%);
+    border-left: 4px solid var(--primary-500);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-4);
+    margin-bottom: var(--spacing-5);
+}
+
+/* Status badge */
+.status-badge-success {
+    background: var(--success-light);
+    color: #065F46;
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+.status-badge-warning {
+    background: var(--warning-light);
+    color: #92400E;
+    padding: var(--spacing-2) var(--spacing-3);
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    font-weight: 600;
+    display: inline-block;
+}
+
+/* ========== ACCESIBILIDAD ========== */
+*:focus-visible {
+    outline: 2px solid var(--primary-500) !important;
+    outline-offset: 2px !important;
+}
+
+/* ========== FIX STREAMLIT DEFAULTS ========== */
+/* Remover padding excesivo */
+.block-container {
+    padding-top: 2rem !important;
+    padding-bottom: 2rem !important;
+}
+
+/* Mejorar spacing entre elementos */
+.element-container {
+    margin-bottom: var(--spacing-3);
+}
+
+/* ========== FIN DEL SISTEMA DE DISEÑO ========== */
