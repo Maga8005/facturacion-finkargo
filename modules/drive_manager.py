@@ -17,6 +17,7 @@ from datetime import datetime
 import time
 import os
 import json
+from modules.config_helper import get_service_account_info, get_drive_folder_id
 
 class DriveManager:
     """Gestiona la búsqueda, descarga y subida de archivos en Google Drive"""
@@ -33,7 +34,7 @@ class DriveManager:
     def __init__(self):
         """Inicializa la conexión con Google Drive usando cuenta de servicio"""
         self.service = None
-        self.folder_id = st.secrets.get("drive_folder_id", "")
+        self.folder_id = get_drive_folder_id()
         self.creds = None
 
         # Autenticar con cuenta de servicio automáticamente
@@ -42,21 +43,16 @@ class DriveManager:
     def _authenticate_with_service_account(self):
         """Autentica con Google Drive usando cuenta de servicio"""
         try:
-            # Ruta al archivo de credenciales de la cuenta de servicio
-            service_account_file = os.path.join(
-                os.path.dirname(os.path.dirname(__file__)),
-                'config',
-                'service_account.json'
-            )
+            # Obtener información de la cuenta de servicio (desde env o archivo)
+            service_account_info = get_service_account_info()
 
-            # Verificar que el archivo existe
-            if not os.path.exists(service_account_file):
-                st.error(f"❌ No se encontró el archivo de cuenta de servicio en: {service_account_file}")
+            if not service_account_info:
+                st.error("❌ No se pudo obtener la configuración de Service Account")
                 return False
 
-            # Crear credenciales desde el archivo de cuenta de servicio
-            self.creds = service_account.Credentials.from_service_account_file(
-                service_account_file,
+            # Crear credenciales desde la información de la cuenta de servicio
+            self.creds = service_account.Credentials.from_service_account_info(
+                service_account_info,
                 scopes=self.SCOPES
             )
 
