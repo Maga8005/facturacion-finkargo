@@ -1,15 +1,27 @@
 # Sistema de Consolidación de Facturas - Finkargo
 
-Sistema automatizado para consolidar y procesar facturas de NUVA y Netsuite, generando reportes consolidados para el análisis de facturación.
+Sistema automatizado para consolidar y procesar facturas, generando reportes consolidados para el análisis de facturación con integración a Google Drive.
+
+## 🌐 Acceso a Producción
+
+**URL:** `https://facturacion-finkargo.onrender.com`
+
+**Usuarios autorizados:**
+- maria.gaitan
+- maleja
+- Alejo
+
+⚠️ **Nota:** Primera carga puede tardar 1-2 minutos (plan gratuito de Render)
 
 ## Descripción
 
 Este sistema permite:
-- Cargar múltiples archivos Excel (2 de NUVA + 1 de Netsuite)
+- Cargar archivo maestro desde Google Drive
+- Buscar y descargar PDFs de facturas automáticamente
 - Consolidar y clasificar conceptos de facturación
 - Validar datos automáticamente
-- Generar reportes personalizados
-- Exportar a Excel, CSV o Google Sheets
+- Generar reportes personalizados en Excel
+- Subir reportes generados a Google Drive
 
 ## Tecnologías
 
@@ -115,7 +127,7 @@ client_x509_cert_url = "..."
 
 ## Uso
 
-### Ejecutar la aplicación
+### Ejecutar la aplicación localmente
 
 ```bash
 streamlit run app.py
@@ -125,9 +137,34 @@ La aplicación se abrirá automáticamente en tu navegador en `http://localhost:
 
 ### Flujo de trabajo
 
-1. **Carga de Archivos**: Sube los 3 archivos Excel requeridos
-2. **Dashboard**: Visualiza métricas y estadísticas consolidadas
-3. **Generar Reporte**: Aplica filtros y exporta reportes personalizados
+1. **Login**: Inicia sesión con tu usuario autorizado
+2. **Cargar Master desde Drive**: Carga el archivo maestro de facturación desde Google Drive
+3. **Buscar PDFs en Drive**: Busca automáticamente PDFs de facturas en Drive
+4. **Generar Reporte Maestro**: Genera reporte consolidado en Excel
+
+## 🚀 Deploy a Producción
+
+### Deploy en Render
+
+El sistema está desplegado en Render (https://render.com). Para actualizar o redesplegar:
+
+**Guía rápida:**
+- Ver: [`DEPLOY_QUICK_START.md`](DEPLOY_QUICK_START.md)
+
+**Documentación completa:**
+- Deploy paso a paso: [`docs/despliegue_render.md`](docs/despliegue_render.md)
+- Troubleshooting: [`docs/troubleshooting_render.md`](docs/troubleshooting_render.md)
+- Post-deploy checklist: [`docs/post_deploy_checklist.md`](docs/post_deploy_checklist.md)
+
+**Deploy automático:**
+Cada vez que se hace push a `main`, Render redespliega automáticamente en 3-5 minutos.
+
+**Variables de entorno requeridas:**
+- `drive_folder_id` - ID de la carpeta de Google Drive
+- `SERVICE_ACCOUNT_JSON` - Credenciales de Service Account (JSON completo)
+- `USERS_JSON` - Diccionario de usuarios autorizados
+
+Ver `.env.example` para el formato completo.
 
 ## Desarrollo
 
@@ -145,19 +182,40 @@ pytest tests/
 - `sheets_manager.py`: Sincronización con Google Sheets
 - `report_generator.py`: Generación de reportes finales
 
-## Próximos Pasos
+## 📁 Archivos de Configuración
 
-1. Implementar lógica de procesamiento de archivos
-2. Configurar mapeo de columnas en `column_mapping.json`
-3. Definir reglas de clasificación en `classification_rules.json`
-4. Configurar conexión a Google Sheets (opcional)
-5. Agregar tests unitarios
+- `config/service_account.json` - Credenciales de Google Cloud (NO subir a Git)
+- `.streamlit/secrets.toml` - Secretos locales para desarrollo (NO subir a Git)
+- `.env.example` - Template de variables de entorno para producción
+- `render.yaml` - Configuración de deploy en Render
+
+## 🔒 Seguridad
+
+**Archivos protegidos por `.gitignore`:**
+- `config/service_account.json` - Credenciales de Google
+- `.streamlit/secrets.toml` - Secretos locales
+- `token.json` - Tokens de autenticación
+- `.env` - Variables de entorno
+
+**NUNCA** subir estos archivos a GitHub. Usar variables de entorno en producción.
+
+## 📚 Documentación
+
+- [`DEPLOY_QUICK_START.md`](DEPLOY_QUICK_START.md) - Inicio rápido de deploy
+- [`docs/despliegue_render.md`](docs/despliegue_render.md) - Guía completa de deploy
+- [`docs/troubleshooting_render.md`](docs/troubleshooting_render.md) - Solución de problemas
+- [`docs/post_deploy_checklist.md`](docs/post_deploy_checklist.md) - Verificación post-deploy
 
 ## Soporte
 
-Para preguntas o problemas, contactar a:
-- **Usuario principal**: Alejandro (Analista de Facturación)
-- **Equipo de desarrollo**: [Tu equipo]
+**Problemas técnicos:**
+- Ver documentación de troubleshooting
+- Revisar logs en Render Dashboard
+- Crear issue en GitHub
+
+**Usuarios:**
+- maria.gaitan
+- maleja
 
 ## Licencia
 
@@ -165,5 +223,7 @@ Propiedad de Finkargo - Uso interno exclusivo
 
 ---
 
-**Versión**: 1.0
-**Última actualización**: 2024
+**Versión**: 1.1.0
+**Última actualización**: 04 Enero 2025
+**Status**: ✅ En Producción
+**URL**: https://facturacion-finkargo.onrender.com
