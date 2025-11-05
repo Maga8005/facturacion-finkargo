@@ -1117,12 +1117,26 @@ elif seleccion == "📊 Reportes desde Master":
                             🎯 Filtros para Generar Reporte
                         </h3>
                         <p style='font-size: 13px; color: #6B7280; margin-bottom: 0;'>
-                            Filtra por tipo de factura, NIT y código de desembolso
+                            Selecciona tus filtros y presiona "Buscar" para ver los resultados
                         </p>
                     </div>
                 """, unsafe_allow_html=True)
 
                 dataframes_master = st.session_state.master_data
+
+                # Inicializar flag de búsqueda si no existe
+                # Mantener activo si ya hay resultados guardados (persistencia después de descargar)
+                if 'mostrar_resultados_filtros' not in st.session_state:
+                    # Si ya hay resultados guardados, mantener visualización activa
+                    st.session_state.mostrar_resultados_filtros = (
+                        'df_filtrado_master' in st.session_state and
+                        st.session_state.df_filtrado_master is not None and
+                        len(st.session_state.df_filtrado_master) > 0
+                    )
+
+                # Inicializar flag de limpieza si no existe
+                if 'limpiar_filtros_flag' not in st.session_state:
+                    st.session_state.limpiar_filtros_flag = False
 
                 # Selector de tipo de factura (con opción Consolidado)
                 hojas_disponibles = list(dataframes_master.keys())
@@ -1309,82 +1323,176 @@ elif seleccion == "📊 Reportes desde Master":
                         filtro_codigo = []
 
                 with col_filtro3:
-                    # Filtro por Fecha
+                    # Filtro por Fecha - Busca en TODAS las columnas de fecha
                     st.markdown("**📅 Filtro por Fecha**")
 
                     if columnas_fecha_disponibles:
-                        # Permitir seleccionar qué columna de fecha usar
-                        columna_fecha_seleccionada = st.selectbox(
-                            "Columna de fecha:",
-                            options=columnas_fecha_disponibles,
-                            index=0,
-                            key="columna_fecha_selector",
-                            help="Selecciona qué columna de fecha usar para filtrar"
+                        # Normalizar TODAS las columnas de fecha encontradas
+                        fechas_normalizadas_dict = {}
+                        for col_fecha in columnas_fecha_disponibles:
+                            try:
+                                df_seleccionado[f'_Fecha_{col_fecha}'] = pd.to_datetime(
+                                    df_seleccionado[col_fecha],
+                                    errors='coerce'
+                                )
+                                fechas_normalizadas_dict[col_fecha] = f'_Fecha_{col_fecha}'
+                            except:
+                                pass
+
+                        # Obtener rango de fechas de TODAS las columnas
+                        todas_fechas = []
+                        for col_normalizada in fechas_normalizadas_dict.values():
+                            fechas_col = df_seleccionado[col_normalizada].dropna()
+                            if len(fechas_col) > 0:
+                                todas_fechas.extend(fechas_col.tolist())
+
+                        columnas_fecha_normalizadas = list(fechas_normalizadas_dict.values())
+                    else:
+                        todas_fechas = []
+                        columnas_fecha_normalizadas = []
+
+                    if todas_fechas:
+                        # Convertir a pandas Series para obtener min/max
+                        import pandas as pd
+                        todas_fechas_series = pd.Series(todas_fechas)
+                        fecha_min = todas_fechas_series.min().date()
+                        fecha_max = todas_fechas_series.max().date()
+
+                        # Selector de rango de fechas
+                        usar_filtro_fecha = st.checkbox(
+                            "Activar filtro de fecha",
+                            value=False,
+                            help=f"Busca en TODAS las columnas de fecha: {', '.join(columnas_fecha_disponibles)}",
+                            key="usar_filtro_fecha"
                         )
 
-                        # Convertir la columna seleccionada a datetime
-                        try:
-                            df_seleccionado['_Fecha_normalizada'] = pd.to_datetime(
-                                df_seleccionado[columna_fecha_seleccionada],
-                                errors='coerce'
-                            )
-                            columna_fecha = columna_fecha_seleccionada
-                        except:
-                            columna_fecha = None
-                            st.error("❌ No se pudo convertir la columna a fecha")
-                    else:
-                        columna_fecha = None
+                        if usar_filtro_fecha:
+                            # Permitir seleccionar hasta 2 años en el futuro para flexibilidad
+                            from datetime import timedelta
+                            max_seleccionable = fecha_max + timedelta(days=730)  # +2 años
 
-                    if columna_fecha and '_Fecha_normalizada' in df_seleccionado.columns:
-
-                        # Obtener rango de fechas disponibles
-                        fechas_validas = df_seleccionado['_Fecha_normalizada'].dropna()
-
-                        if len(fechas_validas) > 0:
-                            fecha_min = fechas_validas.min().date()
-                            fecha_max = fechas_validas.max().date()
-
-                            # Selector de rango de fechas
-                            usar_filtro_fecha = st.checkbox(
-                                "Activar filtro de fecha",
-                                value=False,
-                                help="Filtra registros por rango de fechas",
-                                key="usar_filtro_fecha"
+                            fecha_desde = st.date_input(
+                                "Desde:",
+                                value=fecha_min,
+                                min_value=fecha_min,
+                                max_value=max_seleccionable,
+                                key="fecha_desde_master"
                             )
 
-                            if usar_filtro_fecha:
-                                fecha_desde = st.date_input(
-                                    "Desde:",
-                                    value=fecha_min,
-                                    min_value=fecha_min,
-                                    max_value=fecha_max,
-                                    key="fecha_desde_master"
-                                )
+                            fecha_hasta = st.date_input(
+                                "Hasta:",
+                                value=fecha_max,
+                                min_value=fecha_min,
+                                max_value=max_seleccionable,
+                                key="fecha_hasta_master"
+                            )
 
-                                fecha_hasta = st.date_input(
-                                    "Hasta:",
-                                    value=fecha_max,
-                                    min_value=fecha_min,
-                                    max_value=fecha_max,
-                                    key="fecha_hasta_master"
-                                )
-
-                                st.caption(f"💡 Rango disponible: {fecha_min.year} - {fecha_max.year}")
-                            else:
-                                fecha_desde = None
-                                fecha_hasta = None
+                            st.caption(f"💡 Busca en {len(columnas_fecha_disponibles)} columnas de fecha")
+                            st.caption(f"📅 Rango: {fecha_min.year} - {fecha_max.year}")
                         else:
-                            st.warning("⚠️ No hay fechas válidas")
                             fecha_desde = None
                             fecha_hasta = None
-                            usar_filtro_fecha = False
                     else:
-                        st.warning("⚠️ No se encontró columna de fecha")
+                        st.warning("⚠️ No se encontraron columnas de fecha válidas")
                         fecha_desde = None
                         fecha_hasta = None
                         usar_filtro_fecha = False
+                        columnas_fecha_normalizadas = []
 
                 st.markdown("---")
+
+                # Verificar si hay filtros seleccionados
+                # Si acabamos de limpiar, forzar a False sin importar los valores actuales
+                if st.session_state.get('limpiar_filtros_flag', False):
+                    hay_filtros_seleccionados = False
+                    filtros_activos = []
+                else:
+                    hay_filtros_seleccionados = False
+                    filtros_activos = []
+
+                    if filtro_nit:
+                        hay_filtros_seleccionados = True
+                        filtros_activos.append(f"NIT ({len(filtro_nit)})")
+                    if filtro_codigo:
+                        hay_filtros_seleccionados = True
+                        filtros_activos.append(f"Código ({len(filtro_codigo)})")
+                    if usar_filtro_fecha:
+                        hay_filtros_seleccionados = True
+                        filtros_activos.append("Fecha")
+
+                # Botones de control
+                col_btn1, col_btn2, col_status = st.columns([2, 1, 1])
+                with col_btn1:
+                    texto_boton = "🔍 Buscar / Aplicar Filtros" if hay_filtros_seleccionados else "⚠️ Selecciona al menos un filtro"
+                    help_text = f"Filtros activos: {', '.join(filtros_activos)}" if hay_filtros_seleccionados else "Debes seleccionar al menos un filtro (NIT, Código o Fecha) para poder buscar"
+
+                    ejecutar_busqueda = st.button(
+                        texto_boton,
+                        use_container_width=True,
+                        key="btn_buscar_filtros",
+                        disabled=not hay_filtros_seleccionados,
+                        help=help_text
+                    )
+                    if ejecutar_busqueda:
+                        st.session_state.mostrar_resultados_filtros = True
+                        st.rerun()
+
+                with col_status:
+                    if hay_filtros_seleccionados:
+                        st.markdown("""
+                            <div style='background: #D1FAE5; border: 1px solid #10B981; border-radius: 6px; padding: 8px; text-align: center;'>
+                                <span style='color: #065F46; font-size: 12px; font-weight: 600;'>✓ Listo</span>
+                            </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        st.markdown("""
+                            <div style='background: #FEF3C7; border: 1px solid #F59E0B; border-radius: 6px; padding: 8px; text-align: center;'>
+                                <span style='color: #92400E; font-size: 12px; font-weight: 600;'>⏸ Sin filtros</span>
+                            </div>
+                        """, unsafe_allow_html=True)
+
+                with col_btn2:
+                    if st.button(
+                        "🗑️ Limpiar",
+                        use_container_width=True,
+                        key="btn_limpiar_filtros",
+                        help="Limpia filtros, resultados y libera memoria"
+                    ):
+                        # Limpiar flag de resultados
+                        st.session_state.mostrar_resultados_filtros = False
+
+                        # Limpiar resultados guardados
+                        if 'df_filtrado_master' in st.session_state:
+                            del st.session_state.df_filtrado_master
+
+                        # Borrar TODOS los keys de filtros (permite que widgets se reseteen)
+                        filtros_a_limpiar = [
+                            'filtro_nit_master',
+                            'filtro_codigo_master',
+                            'usar_filtro_fecha',
+                            'fecha_desde_master',
+                            'fecha_hasta_master',
+                        ]
+                        for filtro_key in filtros_a_limpiar:
+                            if filtro_key in st.session_state:
+                                del st.session_state[filtro_key]
+
+                        # Marcar que se limpiaron los filtros
+                        st.session_state.limpiar_filtros_flag = True
+
+                        st.rerun()
+
+                st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+
+                # Mostrar mensaje de confirmación si se limpiaron los filtros
+                if st.session_state.limpiar_filtros_flag:
+                    st.success("✅ Filtros limpiados - Memoria liberada")
+                    st.session_state.limpiar_filtros_flag = False
+
+                # Mostrar mensaje si no se ha ejecutado búsqueda
+                if not st.session_state.mostrar_resultados_filtros:
+                    st.info("👆 Configura los filtros arriba y presiona **'Buscar / Aplicar Filtros'** para ver los resultados")
+                    st.stop()
 
                 # Aplicar filtros
                 df_filtrado = df_seleccionado.copy()
@@ -1419,17 +1527,25 @@ elif seleccion == "📊 Reportes desde Master":
                 if filtro_codigo and columnas_codigo_encontradas:
                     df_filtrado = df_filtrado[df_filtrado['_Codigo_unificado'].isin(filtro_codigo)]
 
-                # Aplicar filtro de Fecha (si está activado)
+                # Aplicar filtro de Fecha (si está activado) - Busca en TODAS las columnas de fecha
                 registros_despues_codigo = len(df_filtrado)
-                if usar_filtro_fecha and columna_fecha and fecha_desde and fecha_hasta:
+                if usar_filtro_fecha and columnas_fecha_normalizadas and fecha_desde and fecha_hasta:
                     # Convertir fechas a datetime para comparación
                     fecha_desde_dt = pd.to_datetime(fecha_desde)
                     fecha_hasta_dt = pd.to_datetime(fecha_hasta) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)  # Incluir todo el día
 
-                    df_filtrado = df_filtrado[
-                        (df_filtrado['_Fecha_normalizada'] >= fecha_desde_dt) &
-                        (df_filtrado['_Fecha_normalizada'] <= fecha_hasta_dt)
-                    ]
+                    # Crear filtro combinado: incluir si CUALQUIER columna de fecha está en el rango
+                    filtro_fecha_combinado = pd.Series([False] * len(df_filtrado), index=df_filtrado.index)
+
+                    for col_fecha_norm in columnas_fecha_normalizadas:
+                        if col_fecha_norm in df_filtrado.columns:
+                            # Agregar registros donde esta columna de fecha esté en el rango
+                            filtro_fecha_combinado = filtro_fecha_combinado | (
+                                (df_filtrado[col_fecha_norm] >= fecha_desde_dt) &
+                                (df_filtrado[col_fecha_norm] <= fecha_hasta_dt)
+                            )
+
+                    df_filtrado = df_filtrado[filtro_fecha_combinado]
 
                 # Mostrar información de filtros aplicados
                 registros_final = len(df_filtrado)
@@ -1469,6 +1585,10 @@ elif seleccion == "📊 Reportes desde Master":
 
                 # Limpiar columnas temporales del resultado final
                 columnas_temporales = ['_NIT_normalizado', '_Codigo_unificado', '_Fecha_normalizada']
+                # Agregar todas las columnas de fecha normalizadas
+                if usar_filtro_fecha and columnas_fecha_normalizadas:
+                    columnas_temporales.extend(columnas_fecha_normalizadas)
+
                 for col_temp in columnas_temporales:
                     if col_temp in df_filtrado.columns:
                         df_filtrado = df_filtrado.drop(columns=[col_temp])
