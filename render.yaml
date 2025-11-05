@@ -13,4 +13,16 @@ services:
         sync: false
       - key: SERVICE_ACCOUNT_JSON
         sync: false
+      # Optimizaciones de memoria para Python
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: STREAMLIT_SERVER_MAX_UPLOAD_SIZE
+        value: "50"
+      - key: STREAMLIT_SERVER_ENABLE_STATIC_SERVING
+        value: "false"
+    # Configuración de healthcheck con timeouts más permisivos
     healthCheckPath: /_stcore/health
+    # Aumentar timeout inicial y entre checks
+    initialDelaySeconds: 60
+    # Plan free tiene límites, pero podemos ajustar estos valores
+    autoDeploy: true

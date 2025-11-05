@@ -1,0 +1,38 @@
+[server]
+# Configuración del servidor
+headless = true
+port = 8501
+enableCORS = false
+enableXsrfProtection = true
+
+# Optimizaciones de memoria para plan gratuito de Render
+maxUploadSize = 50
+maxMessageSize = 50
+
+[browser]
+# Deshabilitar recopilación de métricas para reducir memoria
+gatherUsageStats = false
+serverAddress = "0.0.0.0"
+
+[runner]
+# Optimizaciones de ejecución
+magicEnabled = true
+# Reducir frecuencia de rerun para ahorrar recursos
+fastReruns = false
+
+[client]
+# Deshabilitar toolbar para reducir carga
+toolbarMode = "minimal"
+showErrorDetails = true
+
+[theme]
+# Tema personalizado (opcional)
+primaryColor = "#0C147B"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F4F6"
+textColor = "#1F2937"
+
+[logger]
+# Reducir nivel de logging para ahorrar memoria
+level = "warning"
+messageFormat = "%(asctime)s %(message)s"

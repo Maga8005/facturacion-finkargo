@@ -532,12 +532,14 @@ st.markdown("<div style='margin-bottom: 24px;'></div>", unsafe_allow_html=True)
 with st.sidebar:
     st.markdown("### 🔐 Google Drive")
 
-    # Verificar si hay service account configurada
+    # Verificar si hay service account configurada (archivo local o variable de entorno)
     try:
+        from modules.config_helper import get_service_account_info
         import os
-        service_account_file = 'config/service_account.json'
 
-        if os.path.exists(service_account_file):
+        service_account_info = get_service_account_info()
+
+        if service_account_info:
             # Estado: Service Account configurada
             st.markdown("""
                 <div class='status-badge-success' style='width: 100%; text-align: center; margin-bottom: 12px;'>
@@ -571,15 +573,21 @@ with st.sidebar:
                 st.caption("• Buscar PDFs de facturas")
                 st.caption("• Generar reportes")
         else:
-            st.error("❌ Falta archivo de credenciales")
+            st.error("❌ Falta configuración de credenciales")
             with st.expander("📖 ¿Cómo configurar?"):
                 st.markdown("""
+                **En desarrollo local:**
+
                 Coloca el archivo `service_account.json` en:
                 ```
                 config/service_account.json
                 ```
 
-                Este archivo contiene las credenciales de la Service Account de Google Cloud.
+                **En producción (Render):**
+
+                Configura la variable de entorno `SERVICE_ACCOUNT_JSON` con el contenido completo del archivo JSON de la Service Account.
+
+                Ve a: Render Dashboard → Environment → Add Environment Variable
                 """)
     except Exception as e:
         st.error("❌ Error en configuración")
