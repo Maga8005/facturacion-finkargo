@@ -49,8 +49,8 @@
       "descripcion": "Costos Fijos"
     },
     "204": {
-      "categoria": "intereses_mora",
-      "descripcion": "Interes mora"
+      "categoria": "intereses_corriente",
+      "descripcion": "Interes corriente"
     },
     "205": {
       "categoria": "intereses_mora",
